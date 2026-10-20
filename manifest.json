@@ -1,0 +1,16 @@
+{
+  "name": "Fuel Up - 加油记录",
+  "short_name": "加油记录",
+  "description": "个人极简智能加油记录工具",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#F2F2F7",
+  "theme_color": "#007AFF",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}
