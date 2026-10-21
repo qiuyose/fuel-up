@@ -183,25 +183,47 @@
   <!-- 设置与备份弹窗 -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-content">
-      <div class="modal-title">设置与备份</div>
+      <div class="modal-title">AI 识图与系统设置</div>
+      
+      <!-- 快捷预设按钮 -->
+      <div style="display:flex; gap:6px; margin-bottom:12px;">
+        <button type="button" class="cam-btn" style="flex:1; height:32px; font-size:11px; justify-content:center;" onclick="setPresetConfig('siliconflow')">
+          一键填硅基流动
+        </button>
+        <button type="button" class="cam-btn" style="flex:1; height:32px; font-size:11px; justify-content:center;" onclick="setPresetConfig('openai')">
+          一键填 OpenAI
+        </button>
+      </div>
+
+      <div class="form-group">
+        <label style="font-size:12px;color:var(--text-muted)">API Key (令牌)</label>
+        <input type="text" id="settingApiKey" placeholder="sk-...">
+      </div>
+
+      <div class="form-group">
+        <label style="font-size:12px;color:var(--text-muted)">服务地址 (Base URL)</label>
+        <input type="text" id="settingBaseUrl" placeholder="https://api.siliconflow.cn/v1">
+      </div>
+
+      <div class="form-group">
+        <label style="font-size:12px;color:var(--text-muted)">识图视觉模型名称 (Model)</label>
+        <input type="text" id="settingModel" placeholder="Qwen/Qwen2-VL-7B-Instruct">
+        <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
+          ⚠️ 提示：DeepSeek 是纯文本模型无法识别图片。硅基流动上请使用视觉模型：<b>Qwen/Qwen2-VL-7B-Instruct</b>（免费极速）。
+        </small>
+      </div>
+
       <div class="form-group">
         <label style="font-size:12px;color:var(--text-muted)">基准初始总里程 (km)</label>
-        <input type="number" id="settingBaseMileage" placeholder="例如：45000 (首笔计算基准)">
+        <input type="number" id="settingBaseMileage" placeholder="例如：45000">
       </div>
-      <div class="form-group">
-        <label style="font-size:12px;color:var(--text-muted)">AI 视觉识图 API Key (选填)</label>
-        <input type="text" id="settingApiKey" placeholder="sk-...">
-        <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">支持 OpenAI / DeepSeek / 通义千问等兼容 API，不填也能拍照留存。</small>
-      </div>
-      <div class="form-group">
-        <label style="font-size:12px;color:var(--text-muted)">API 服务地址 (Base URL)</label>
-        <input type="text" id="settingBaseUrl" placeholder="https://api.openai.com/v1">
-      </div>
+
       <div style="display: flex; gap: 8px; margin-top: 14px;">
-        <button class="cam-btn" style="flex:1; justify-content:center;" onclick="exportJSON()">备份到本地</button>
-        <button class="cam-btn" style="flex:1; justify-content:center;" onclick="document.getElementById('importFileInput').click()">恢复备份</button>
+        <button class="cam-btn" style="flex:1; justify-content:center;" onclick="exportJSON()">备份数据</button>
+        <button class="cam-btn" style="flex:1; justify-content:center;" onclick="document.getElementById('importFileInput').click()">恢复数据</button>
         <input type="file" id="importFileInput" class="hidden-input" accept=".json" onchange="importJSON(this)">
       </div>
+
       <button class="btn-submit" style="margin-top:16px; height:44px; font-size:15px;" onclick="closeSettingsModal()">保存并生效</button>
     </div>
   </div>

@@ -1,4 +1,4 @@
-﻿// Fuel Up - 核心逻辑
+﻿// Fuel Up - 核心逻辑 (v1.1 硅基流动与国产视觉模型全面优化版)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
 
@@ -189,66 +189,128 @@ function renderPhotoThumb(type, dataUrl) {
   `;
 }
 
-// 8. 智能识别 (支持配置的大模型 Vision API 或本地提示)
+// 8. 智能视觉识别 (支持硅基流动 Qwen2-VL、OpenAI gpt-4o 等)
 async function runOcrRecognition(type, base64Image) {
   const settings = getSettings();
   const badge = document.getElementById(`badge_${type}`);
 
-  if (settings.apiKey) {
+  if (!settings.apiKey) {
     if (badge) {
-      badge.innerText = 'AI 识别中...';
-      badge.style.background = 'var(--primary)';
-    }
-    try {
-      const promptText = type === 'dashboard' 
-        ? '请提取汽车仪表盘上的总里程数字（公里数km）。只需返回JSON格式：{"mileage": 12345}'
-        : '请提取加油机屏幕上的总金额、升数和单价。只需返回JSON格式：{"amount": 300.0, "volume": 39.5, "price": 7.59}';
-
-      const res = await fetch(`${settings.baseUrl || 'https://api.openai.com/v1'}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${settings.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'text', text: promptText },
-                { type: 'image_url', image_url: { url: base64Image } }
-              ]
-            }
-          ],
-          response_format: { type: 'json_object' }
-        })
-      });
-
-      const data = await res.json();
-      const parsed = JSON.parse(data.choices[0].message.content);
-
-      if (type === 'dashboard' && parsed.mileage) {
-        document.getElementById('inputMileage').value = parsed.mileage;
-        if (badge) badge.innerText = '已识别里程';
-      } else if (type === 'meter') {
-        if (parsed.amount) document.getElementById('inputAmount').value = parsed.amount;
-        if (parsed.price) document.getElementById('inputPrice').value = parsed.price;
-        if (parsed.volume) document.getElementById('inputVolume').value = parsed.volume;
-        if (badge) badge.innerText = '已识别加油机';
-      }
-      onInputChanged();
-    } catch (err) {
-      if (badge) {
-        badge.innerText = '识别未响应，请核对输入';
-        badge.style.background = 'var(--accent-orange)';
-      }
-    }
-  } else {
-    if (badge) {
-      badge.innerText = '照片已留存 (可手动填数)';
+      badge.innerText = '照片已留存 (未配Key)';
       badge.style.background = 'var(--text-muted)';
     }
+    return;
+  }
+
+  if (badge) {
+    badge.innerText = 'AI 识别中...';
+    badge.style.background = 'var(--primary)';
+  }
+
+  try {
+    // 规范化 Base URL
+    let baseUrl = (settings.baseUrl || 'https://api.siliconflow.cn/v1').trim();
+    baseUrl = baseUrl.replace(/\/+$/, '');
+    if (baseUrl.endsWith('/chat/completions')) {
+      baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+    }
+    const endpoint = `${baseUrl}/chat/completions`;
+
+    // 默认模型（针对硅基流动推荐 Qwen2-VL 视觉模型，因 DeepSeek 是纯文本模型）
+    const model = (settings.model || 'Qwen/Qwen2-VL-7B-Instruct').trim();
+
+    const promptText = type === 'dashboard' 
+      ? '请仔细识别图片中汽车仪表盘上的总里程数字（公里数km，通常显示在ODO或总里程旁边）。只输出纯JSON，不要输出markdown代码块，格式例如：{"mileage": 12345}'
+      : '请仔细识别图片中加油机屏幕上的总金额(元)、加油升数(L)和单价(元/L)。只输出纯JSON，不要输出markdown代码块，格式例如：{"amount": 300.0, "volume": 39.5, "price": 7.59}';
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${settings.apiKey.trim()}`
+      },
+      body: JSON.stringify({
+        model: model,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: promptText },
+              { type: 'image_url', image_url: { url: base64Image } }
+            ]
+          }
+        ],
+        temperature: 0.1
+      })
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      let errMsg = `HTTP ${res.status}`;
+      try {
+        const errJson = JSON.parse(errText);
+        errMsg = errJson.message || errJson.error?.message || errMsg;
+      } catch (e) {
+        errMsg = errText.slice(0, 80) || errMsg;
+      }
+
+      // 常见错误精准友好提示
+      if (res.status === 400 && (errMsg.includes('support') || errMsg.includes('image') || errMsg.includes('vision') || errMsg.includes('parameter'))) {
+        alert(`【模型不支持视觉】当前填写的模型 "${model}" 不支持读取图片！\n\n提示：DeepSeek (如 DeepSeek-V3/R1) 是纯文本大模型，不能识别图片。硅基流动上请改用视觉模型：\nQwen/Qwen2-VL-7B-Instruct\n\n请点击右上角设置修改模型名称。`);
+      } else if (res.status === 401) {
+        alert('【API Key 错误】提示 401 未授权，请检查设置里的 API Key 是否正确复制。');
+      } else {
+        alert(`API 识别失败 (${errMsg})\n请检查右上角设置：模型名称与服务地址。`);
+      }
+
+      if (badge) {
+        badge.innerText = '识别出错，请手动输入';
+        badge.style.background = 'var(--accent-orange)';
+      }
+      return;
+    }
+
+    const data = await res.json();
+    const rawContent = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '';
+
+    // 容错提取 JSON
+    const jsonMatch = rawContent.match(/\{[\s\S]*?\}/);
+    if (!jsonMatch) {
+      throw new Error('未从 AI 回复中提取到标准 JSON 数据');
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+
+    if (type === 'dashboard' && parsed.mileage) {
+      const parsedMileage = parseFloat(parsed.mileage);
+      if (!isNaN(parsedMileage)) {
+        document.getElementById('inputMileage').value = parsedMileage;
+        if (badge) badge.innerText = '✓ 已识别里程';
+      }
+    } else if (type === 'meter') {
+      let recognizedCount = 0;
+      if (parsed.amount) {
+        document.getElementById('inputAmount').value = parseFloat(parsed.amount);
+        recognizedCount++;
+      }
+      if (parsed.price) {
+        document.getElementById('inputPrice').value = parseFloat(parsed.price);
+        recognizedCount++;
+      }
+      if (parsed.volume) {
+        document.getElementById('inputVolume').value = parseFloat(parsed.volume);
+        recognizedCount++;
+      }
+      if (badge) badge.innerText = recognizedCount > 0 ? '✓ 已识别加油机' : '未提取到数据';
+    }
+    onInputChanged();
+  } catch (err) {
+    console.error('OCR Error:', err);
+    if (badge) {
+      badge.innerText = '请核对输入数值';
+      badge.style.background = 'var(--accent-orange)';
+    }
+    alert(`识别解析失败: ${err.message || '网络超时'}\n可直接手动填写。`);
   }
 }
 
@@ -536,17 +598,29 @@ function loadSettings() {
 function openSettingsModal() {
   const settings = getSettings();
   document.getElementById('settingApiKey').value = settings.apiKey || '';
-  document.getElementById('settingBaseUrl').value = settings.baseUrl || '';
+  document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
+  document.getElementById('settingModel').value = settings.model || 'Qwen/Qwen2-VL-7B-Instruct';
   document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   document.getElementById('settingsModal').classList.add('show');
+}
+
+function setPresetConfig(preset) {
+  if (preset === 'siliconflow') {
+    document.getElementById('settingBaseUrl').value = 'https://api.siliconflow.cn/v1';
+    document.getElementById('settingModel').value = 'Qwen/Qwen2-VL-7B-Instruct';
+  } else if (preset === 'openai') {
+    document.getElementById('settingBaseUrl').value = 'https://api.openai.com/v1';
+    document.getElementById('settingModel').value = 'gpt-4o-mini';
+  }
 }
 
 function closeSettingsModal() {
   const apiKey = document.getElementById('settingApiKey').value.trim();
   const baseUrl = document.getElementById('settingBaseUrl').value.trim();
+  const model = document.getElementById('settingModel').value.trim();
   const baseMileage = document.getElementById('settingBaseMileage').value.trim();
 
-  const settings = { apiKey, baseUrl };
+  const settings = { apiKey, baseUrl, model };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   if (baseMileage) {
     localStorage.setItem(SETTINGS_KEY + '_base_mileage', baseMileage);
