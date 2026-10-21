@@ -1,17 +1,17 @@
-﻿// Fuel Up - 核心逻辑 (v1.1 硅基流动与国产视觉模型全面优化版)
+﻿// Fuel Up - 核心逻辑 (v1.2 支持高德地图周边加油站检索)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
 
 let currentOil = '92#';
 let currentStation = '中国石化加油站';
+let nearbyStations = []; // 周边加油站候选列表
 let currentPhotos = { dashboard: null, meter: null };
 let currentPos = null;
 
-// DOM 加载完成初始化
 window.addEventListener('DOMContentLoaded', () => {
   initDate();
-  initLocation();
   loadSettings();
+  initLocation();
   renderStats();
   renderHistory();
   registerServiceWorker();
@@ -33,45 +33,112 @@ function initDate() {
   if (dateEl) dateEl.innerText = dateStr;
 }
 
-// 3. 自动定位与反查加油站
+// 3. 高德地图周边加油站定位检索 (JSONP 无跨域)
 function initLocation() {
   const locText = document.getElementById('locationText');
+  const settings = getSettings();
+  const amapKey = (settings.amapKey || '').trim();
+
+  // 4秒快速超时保护，绝不让界面一直停留在“正在定位”
+  const fallbackTimer = setTimeout(() => {
+    if (locText && locText.innerText.includes('正在定位')) {
+      const records = getRecords();
+      const lastStation = records.length > 0 ? records[0].station : '中国石化加油站';
+      currentStation = lastStation;
+      locText.innerText = `${currentStation} (点击修改)`;
+    }
+  }, 4000);
+
   if (!navigator.geolocation) {
+    clearTimeout(fallbackTimer);
     locText.innerText = '中国石化 (点击修改)';
     return;
   }
+
   navigator.geolocation.getCurrentPosition(
     (pos) => {
+      clearTimeout(fallbackTimer);
       currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      fetch(`https://nominatim.openstreetmap.org/reverse?lat=${currentPos.lat}&lon=${currentPos.lng}&format=json&accept-language=zh`)
-        .then(res => res.json())
-        .then(data => {
-          if (data && data.address) {
-            const road = data.address.road || data.address.suburb || '周边';
-            currentStation = `加油站 (${road})`;
-            locText.innerText = currentStation;
-          } else {
-            currentStation = '周边加油站';
-            locText.innerText = currentStation;
-          }
-        })
-        .catch(() => {
-          locText.innerText = '已定位当前站点 (点击可修改)';
-        });
+
+      if (amapKey) {
+        // 使用高德地图 Web 服务周边检索周边 3000 米内的加油站
+        searchAmapNearbyGasStations(currentPos.lng, currentPos.lat, amapKey);
+      } else {
+        // 未填高德 Key 时，使用上次加油站或默认，并提示填 Key
+        const records = getRecords();
+        const lastStation = records.length > 0 ? records[0].station : '中国石化加油站';
+        currentStation = lastStation;
+        locText.innerText = `${currentStation} (未填高德Key)`;
+      }
     },
-    () => {
-      locText.innerText = '中国石化 (点击可修改名称)';
+    (err) => {
+      clearTimeout(fallbackTimer);
+      locText.innerText = '中国石化 (请开启手机定位权限)';
     },
     { enableHighAccuracy: true, timeout: 5000 }
   );
 }
 
+// 通过 JSONP 调用高德周边加油站 API
+function searchAmapNearbyGasStations(lng, lat, key) {
+  const locText = document.getElementById('locationText');
+  const callbackName = 'onAmapPoiResponse_' + Date.now();
+
+  window[callbackName] = function(data) {
+    delete window[callbackName];
+    const scriptEl = document.getElementById(callbackName);
+    if (scriptEl) scriptEl.remove();
+
+    if (data && data.status === '1' && data.pois && data.pois.length > 0) {
+      nearbyStations = data.pois.map(p => ({
+        name: p.name,
+        address: p.address,
+        distance: p.distance
+      }));
+
+      // 默认选择最近的第一家
+      const nearest = nearbyStations[0];
+      currentStation = nearest.name;
+      locText.innerText = `📍 ${currentStation} (${nearest.distance}米)`;
+    } else if (data && data.info === 'INVALID_USER_KEY') {
+      locText.innerText = '高德Key无效 (请检查设置)';
+    } else {
+      locText.innerText = '附近无加油站 (点击手动输入)';
+    }
+  };
+
+  const script = document.createElement('script');
+  script.id = callbackName;
+  script.src = `https://restapi.amap.com/v3/place/around?key=${key}&location=${lng},${lat}&keywords=加油站&types=010100&radius=3000&sortrule=distance&offset=6&page=1&extensions=base&output=json&callback=${callbackName}`;
+  script.onerror = () => {
+    locText.innerText = '中国石化 (高德网络受阻)';
+  };
+  document.body.appendChild(script);
+}
+
+// 点击修改或切换周边加油站
 function editLocation() {
-  const newName = prompt('请输入当前加油站名称：', currentStation);
-  if (newName && newName.trim()) {
-    currentStation = newName.trim();
-    document.getElementById('locationText').innerText = currentStation;
+  if (nearbyStations && nearbyStations.length > 0) {
+    let optionsText = '周边检测到以下加油站，请输入序号选择，或直接输入新名字：\n';
+    nearbyStations.forEach((s, idx) => {
+      optionsText += `${idx + 1}. ${s.name} (${s.distance}米)\n`;
+    });
+    const input = prompt(optionsText, '1');
+    if (!input) return;
+
+    const num = parseInt(input.trim());
+    if (!isNaN(num) && num >= 1 && num <= nearbyStations.length) {
+      currentStation = nearbyStations[num - 1].name;
+    } else {
+      currentStation = input.trim();
+    }
+  } else {
+    const newName = prompt('请输入当前加油站名称：', currentStation);
+    if (newName && newName.trim()) {
+      currentStation = newName.trim();
+    }
   }
+  document.getElementById('locationText').innerText = currentStation;
 }
 
 // 4. 油品标号选择
@@ -189,7 +256,7 @@ function renderPhotoThumb(type, dataUrl) {
   `;
 }
 
-// 8. 智能视觉识别 (支持硅基流动 Qwen2-VL、OpenAI gpt-4o 等)
+// 8. 智能视觉识别
 async function runOcrRecognition(type, base64Image) {
   const settings = getSettings();
   const badge = document.getElementById(`badge_${type}`);
@@ -208,15 +275,12 @@ async function runOcrRecognition(type, base64Image) {
   }
 
   try {
-    // 规范化 Base URL
     let baseUrl = (settings.baseUrl || 'https://api.siliconflow.cn/v1').trim();
     baseUrl = baseUrl.replace(/\/+$/, '');
     if (baseUrl.endsWith('/chat/completions')) {
       baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
     }
     const endpoint = `${baseUrl}/chat/completions`;
-
-    // 默认模型（针对硅基流动推荐 Qwen2-VL 视觉模型，因 DeepSeek 是纯文本模型）
     const model = (settings.model || 'Qwen/Qwen2-VL-7B-Instruct').trim();
 
     const promptText = type === 'dashboard' 
@@ -250,17 +314,14 @@ async function runOcrRecognition(type, base64Image) {
       try {
         const errJson = JSON.parse(errText);
         errMsg = errJson.message || errJson.error?.message || errMsg;
-      } catch (e) {
-        errMsg = errText.slice(0, 80) || errMsg;
-      }
+      } catch (e) {}
 
-      // 常见错误精准友好提示
       if (res.status === 400 && (errMsg.includes('support') || errMsg.includes('image') || errMsg.includes('vision') || errMsg.includes('parameter'))) {
-        alert(`【模型不支持视觉】当前填写的模型 "${model}" 不支持读取图片！\n\n提示：DeepSeek (如 DeepSeek-V3/R1) 是纯文本大模型，不能识别图片。硅基流动上请改用视觉模型：\nQwen/Qwen2-VL-7B-Instruct\n\n请点击右上角设置修改模型名称。`);
+        alert(`【模型不支持视觉】当前模型 "${model}" 不支持图片！\n请在设置中将模型改为 Qwen/Qwen2-VL-7B-Instruct。`);
       } else if (res.status === 401) {
-        alert('【API Key 错误】提示 401 未授权，请检查设置里的 API Key 是否正确复制。');
+        alert('【API Key 错误】提示 401 未授权，请检查设置里的 API Key。');
       } else {
-        alert(`API 识别失败 (${errMsg})\n请检查右上角设置：模型名称与服务地址。`);
+        alert(`API 识别失败: ${errMsg}`);
       }
 
       if (badge) {
@@ -273,7 +334,6 @@ async function runOcrRecognition(type, base64Image) {
     const data = await res.json();
     const rawContent = data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : '';
 
-    // 容错提取 JSON
     const jsonMatch = rawContent.match(/\{[\s\S]*?\}/);
     if (!jsonMatch) {
       throw new Error('未从 AI 回复中提取到标准 JSON 数据');
@@ -307,7 +367,7 @@ async function runOcrRecognition(type, base64Image) {
   } catch (err) {
     console.error('OCR Error:', err);
     if (badge) {
-      badge.innerText = '请核对输入数值';
+      badge.innerText = '请手动核对数值';
       badge.style.background = 'var(--accent-orange)';
     }
     alert(`识别解析失败: ${err.message || '网络超时'}\n可直接手动填写。`);
@@ -600,6 +660,7 @@ function openSettingsModal() {
   document.getElementById('settingApiKey').value = settings.apiKey || '';
   document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
   document.getElementById('settingModel').value = settings.model || 'Qwen/Qwen2-VL-7B-Instruct';
+  document.getElementById('settingAmapKey').value = settings.amapKey || '';
   document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   document.getElementById('settingsModal').classList.add('show');
 }
@@ -618,13 +679,15 @@ function closeSettingsModal() {
   const apiKey = document.getElementById('settingApiKey').value.trim();
   const baseUrl = document.getElementById('settingBaseUrl').value.trim();
   const model = document.getElementById('settingModel').value.trim();
+  const amapKey = document.getElementById('settingAmapKey').value.trim();
   const baseMileage = document.getElementById('settingBaseMileage').value.trim();
 
-  const settings = { apiKey, baseUrl, model };
+  const settings = { apiKey, baseUrl, model, amapKey };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   if (baseMileage) {
     localStorage.setItem(SETTINGS_KEY + '_base_mileage', baseMileage);
   }
   document.getElementById('settingsModal').classList.remove('show');
   onInputChanged();
+  initLocation(); // 重新按新高德 Key 定位
 }

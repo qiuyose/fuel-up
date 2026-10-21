@@ -53,8 +53,8 @@
       <!-- 当前位置与加油站名称 -->
       <div class="location-bar">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-        <span id="locationText">正在定位当前加油站...</span>
-        <a class="location-edit-btn" onclick="editLocation()">修改</a>
+        <span id="locationText">正在查找周边加油站...</span>
+        <a class="location-edit-btn" onclick="editLocation()">切换/修改</a>
       </div>
 
       <!-- 表单主体卡片 -->
@@ -183,7 +183,7 @@
   <!-- 设置与备份弹窗 -->
   <div class="modal-overlay" id="settingsModal">
     <div class="modal-content">
-      <div class="modal-title">AI 识图与系统设置</div>
+      <div class="modal-title">系统配置与数据管理</div>
       
       <!-- 快捷预设按钮 -->
       <div style="display:flex; gap:6px; margin-bottom:12px;">
@@ -196,7 +196,15 @@
       </div>
 
       <div class="form-group">
-        <label style="font-size:12px;color:var(--text-muted)">API Key (令牌)</label>
+        <label style="font-size:12px;color:var(--text-muted)">高德地图 Key (选填，检索周边加油站)</label>
+        <input type="text" id="settingAmapKey" placeholder="高德开放平台申请的 Web服务 Key">
+        <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
+          填入后，进站自动按距离推荐最近加油站并可一键切换。
+        </small>
+      </div>
+
+      <div class="form-group">
+        <label style="font-size:12px;color:var(--text-muted)">AI 识图 API Key (选填)</label>
         <input type="text" id="settingApiKey" placeholder="sk-...">
       </div>
 
@@ -208,9 +216,6 @@
       <div class="form-group">
         <label style="font-size:12px;color:var(--text-muted)">识图视觉模型名称 (Model)</label>
         <input type="text" id="settingModel" placeholder="Qwen/Qwen2-VL-7B-Instruct">
-        <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
-          ⚠️ 提示：DeepSeek 是纯文本模型无法识别图片。硅基流动上请使用视觉模型：<b>Qwen/Qwen2-VL-7B-Instruct</b>（免费极速）。
-        </small>
       </div>
 
       <div class="form-group">
