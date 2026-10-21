@@ -691,3 +691,83 @@ function closeSettingsModal() {
   onInputChanged();
   initLocation(); // 重新按新高德 Key 定位
 }
+// 强制刷新并从服务器获取最新版本与定位
+function forceUpdateApp() {
+  const indicator = document.getElementById('ptrIndicator');
+  const ptrText = document.getElementById('ptrText');
+  if (indicator) {
+    indicator.classList.add('refreshing');
+    if (ptrText) ptrText.innerText = '正在获取最新版本...';
+  }
+
+  // 通知 Service Worker 放弃旧缓存并更新
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((registrations) => {
+      for (let reg of registrations) {
+        reg.update();
+      }
+    });
+  }
+
+  // 0.4 秒动画后强制重载
+  setTimeout(() => {
+    window.location.reload();
+  }, 400);
+}
+
+// 模拟原生 iOS 下拉刷新手势 (Pull-to-refresh)
+(function initPullToRefresh() {
+  let startY = 0;
+  let currentY = 0;
+  let isPulling = false;
+  const threshold = 65;
+
+  const indicator = document.getElementById('ptrIndicator');
+  const ptrText = document.getElementById('ptrText');
+  const ptrArrow = document.querySelector('.ptr-arrow');
+
+  window.addEventListener('touchstart', (e) => {
+    if (window.scrollY <= 2 && e.touches.length === 1) {
+      startY = e.touches[0].pageY;
+      isPulling = true;
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchmove', (e) => {
+    if (!isPulling) return;
+    currentY = e.touches[0].pageY;
+    const diff = currentY - startY;
+
+    if (diff > 10 && window.scrollY <= 2) {
+      const translateY = Math.min(diff * 0.45 - 50, 20);
+      if (indicator) {
+        indicator.classList.add('pulling');
+        indicator.style.transform = `translateX(-50%) translateY(${translateY}px)`;
+        if (diff > threshold) {
+          if (ptrText) ptrText.innerText = '松开立即更新';
+          if (ptrArrow) ptrArrow.style.transform = 'rotate(180deg)';
+        } else {
+          if (ptrText) ptrText.innerText = '下拉刷新应用';
+          if (ptrArrow) ptrArrow.style.transform = 'rotate(0deg)';
+        }
+      }
+    }
+  }, { passive: true });
+
+  window.addEventListener('touchend', () => {
+    if (!isPulling) return;
+    const diff = currentY - startY;
+    isPulling = false;
+
+    if (diff > threshold && window.scrollY <= 2) {
+      forceUpdateApp();
+    } else {
+      if (indicator) {
+        indicator.style.transform = '';
+        indicator.classList.remove('pulling');
+      }
+    }
+    startY = 0;
+    currentY = 0;
+  });
+})();
