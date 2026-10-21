@@ -1,10 +1,11 @@
-﻿// Fuel Up - 核心逻辑 (v1.2 支持高德地图周边加油站检索)
+﻿// Fuel Up - 核心逻辑 (v1.3 密码掩码与直观状态版)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
+const MASK_PLACEHOLDER = '••••••••••••••••'; // 掩码占位符
 
 let currentOil = '92#';
 let currentStation = '中国石化加油站';
-let nearbyStations = []; // 周边加油站候选列表
+let nearbyStations = [];
 let currentPhotos = { dashboard: null, meter: null };
 let currentPos = null;
 
@@ -15,6 +16,7 @@ window.addEventListener('DOMContentLoaded', () => {
   renderStats();
   renderHistory();
   registerServiceWorker();
+  initPullToRefresh();
 });
 
 // 1. 注册 PWA Service Worker
@@ -33,15 +35,14 @@ function initDate() {
   if (dateEl) dateEl.innerText = dateStr;
 }
 
-// 3. 高德地图周边加油站定位检索 (JSONP 无跨域)
+// 3. 高德地图周边加油站定位检索
 function initLocation() {
   const locText = document.getElementById('locationText');
   const settings = getSettings();
   const amapKey = (settings.amapKey || '').trim();
 
-  // 4秒快速超时保护，绝不让界面一直停留在“正在定位”
   const fallbackTimer = setTimeout(() => {
-    if (locText && locText.innerText.includes('正在定位')) {
+    if (locText && locText.innerText.includes('正在')) {
       const records = getRecords();
       const lastStation = records.length > 0 ? records[0].station : '中国石化加油站';
       currentStation = lastStation;
@@ -61,25 +62,22 @@ function initLocation() {
       currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
 
       if (amapKey) {
-        // 使用高德地图 Web 服务周边检索周边 3000 米内的加油站
         searchAmapNearbyGasStations(currentPos.lng, currentPos.lat, amapKey);
       } else {
-        // 未填高德 Key 时，使用上次加油站或默认，并提示填 Key
         const records = getRecords();
         const lastStation = records.length > 0 ? records[0].station : '中国石化加油站';
         currentStation = lastStation;
-        locText.innerText = `${currentStation} (未填高德Key)`;
+        locText.innerText = `${currentStation} (未配高德Key)`;
       }
     },
-    (err) => {
+    () => {
       clearTimeout(fallbackTimer);
-      locText.innerText = '中国石化 (请开启手机定位权限)';
+      locText.innerText = '中国石化 (点击修改)';
     },
     { enableHighAccuracy: true, timeout: 5000 }
   );
 }
 
-// 通过 JSONP 调用高德周边加油站 API
 function searchAmapNearbyGasStations(lng, lat, key) {
   const locText = document.getElementById('locationText');
   const callbackName = 'onAmapPoiResponse_' + Date.now();
@@ -96,14 +94,13 @@ function searchAmapNearbyGasStations(lng, lat, key) {
         distance: p.distance
       }));
 
-      // 默认选择最近的第一家
       const nearest = nearbyStations[0];
       currentStation = nearest.name;
       locText.innerText = `📍 ${currentStation} (${nearest.distance}米)`;
     } else if (data && data.info === 'INVALID_USER_KEY') {
-      locText.innerText = '高德Key无效 (请检查设置)';
+      locText.innerText = '高德Key无效 (请核对设置)';
     } else {
-      locText.innerText = '附近无加油站 (点击手动输入)';
+      locText.innerText = '周边加油站 (点击手动输入)';
     }
   };
 
@@ -116,7 +113,6 @@ function searchAmapNearbyGasStations(lng, lat, key) {
   document.body.appendChild(script);
 }
 
-// 点击修改或切换周边加油站
 function editLocation() {
   if (nearbyStations && nearbyStations.length > 0) {
     let optionsText = '周边检测到以下加油站，请输入序号选择，或直接输入新名字：\n';
@@ -621,7 +617,7 @@ function importJSON(input) {
         alert('数据恢复成功！');
         renderStats();
         renderHistory();
-        closeSettingsModal();
+        dismissSettingsModal();
       }
     } catch(err) {
       alert('导入失败，文件内容有误！');
@@ -630,7 +626,7 @@ function importJSON(input) {
   reader.readAsText(file);
 }
 
-// 辅助存取
+// 14. 设置弹窗管理与掩码控制
 function getRecords() {
   try {
     return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
@@ -657,12 +653,85 @@ function loadSettings() {
 
 function openSettingsModal() {
   const settings = getSettings();
-  document.getElementById('settingApiKey').value = settings.apiKey || '';
+  const apiInput = document.getElementById('settingApiKey');
+  const amapInput = document.getElementById('settingAmapKey');
+  const badgeApi = document.getElementById('badgeApiStatus');
+  const badgeAmap = document.getElementById('badgeAmapStatus');
+
+  // AI 识图 Key 脱敏展示
+  if (settings.apiKey && settings.apiKey.trim()) {
+    apiInput.value = MASK_PLACEHOLDER;
+    apiInput.dataset.masked = 'true';
+    if (badgeApi) badgeApi.style.display = 'inline-block';
+  } else {
+    apiInput.value = '';
+    apiInput.dataset.masked = 'false';
+    if (badgeApi) badgeApi.style.display = 'none';
+  }
+
+  // 高德 Key 脱敏展示
+  if (settings.amapKey && settings.amapKey.trim()) {
+    amapInput.value = MASK_PLACEHOLDER;
+    amapInput.dataset.masked = 'true';
+    if (badgeAmap) badgeAmap.style.display = 'inline-block';
+  } else {
+    amapInput.value = '';
+    amapInput.dataset.masked = 'false';
+    if (badgeAmap) badgeAmap.style.display = 'none';
+  }
+
   document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
   document.getElementById('settingModel').value = settings.model || 'Qwen/Qwen2-VL-7B-Instruct';
-  document.getElementById('settingAmapKey').value = settings.amapKey || '';
   document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   document.getElementById('settingsModal').classList.add('show');
+}
+
+// 聚焦输入框时，如果是掩码，则自动清空供用户输入新Key
+function handleKeyFocus(input) {
+  if (input.dataset.masked === 'true') {
+    input.value = '';
+    input.dataset.masked = 'false';
+  }
+}
+
+function handleKeyBlur(input) {
+  // 如果失焦且为空，恢复掩码显示以表明原来已配置
+  const settings = getSettings();
+  const isAmap = input.id === 'settingAmapKey';
+  const existingKey = isAmap ? settings.amapKey : settings.apiKey;
+  if (!input.value.trim() && existingKey) {
+    input.value = MASK_PLACEHOLDER;
+    input.dataset.masked = 'true';
+  }
+}
+
+// 切换密码显示与隐藏
+function togglePasswordVisibility(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPwd = input.type === 'password';
+  input.type = isPwd ? 'text' : 'password';
+
+  // 如果当前是掩码，并且用户切换到明文查看，展示真实 Key
+  const settings = getSettings();
+  const isAmap = inputId === 'settingAmapKey';
+  const realKey = isAmap ? settings.amapKey : settings.apiKey;
+  if (!isPwd) {
+    // 切换回密文
+    if (input.dataset.masked === 'true') {
+      input.value = MASK_PLACEHOLDER;
+    }
+  } else {
+    // 切换为明文查看
+    if (input.dataset.masked === 'true' && realKey) {
+      input.value = realKey;
+    }
+  }
+}
+
+// 右上角 X 直接关闭（不保存改动）
+function dismissSettingsModal() {
+  document.getElementById('settingsModal').classList.remove('show');
 }
 
 function setPresetConfig(preset) {
@@ -675,32 +744,57 @@ function setPresetConfig(preset) {
   }
 }
 
+// 点击保存并生效
 function closeSettingsModal() {
-  const apiKey = document.getElementById('settingApiKey').value.trim();
+  const settings = getSettings();
+  const apiInput = document.getElementById('settingApiKey');
+  const amapInput = document.getElementById('settingAmapKey');
+
+  // 判断是否输入了新 Key，还是保持原样掩码
+  let newApiKey = settings.apiKey || '';
+  if (apiInput.value.trim() && apiInput.value !== MASK_PLACEHOLDER) {
+    newApiKey = apiInput.value.trim();
+  } else if (!apiInput.value.trim() && apiInput.dataset.masked !== 'true') {
+    newApiKey = '';
+  }
+
+  let newAmapKey = settings.amapKey || '';
+  if (amapInput.value.trim() && amapInput.value !== MASK_PLACEHOLDER) {
+    newAmapKey = amapInput.value.trim();
+  } else if (!amapInput.value.trim() && amapInput.dataset.masked !== 'true') {
+    newAmapKey = '';
+  }
+
   const baseUrl = document.getElementById('settingBaseUrl').value.trim();
   const model = document.getElementById('settingModel').value.trim();
-  const amapKey = document.getElementById('settingAmapKey').value.trim();
   const baseMileage = document.getElementById('settingBaseMileage').value.trim();
 
-  const settings = { apiKey, baseUrl, model, amapKey };
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  const newSettings = {
+    apiKey: newApiKey,
+    amapKey: newAmapKey,
+    baseUrl: baseUrl,
+    model: model
+  };
+
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
   if (baseMileage) {
     localStorage.setItem(SETTINGS_KEY + '_base_mileage', baseMileage);
   }
-  document.getElementById('settingsModal').classList.remove('show');
+
+  dismissSettingsModal();
   onInputChanged();
-  initLocation(); // 重新按新高德 Key 定位
+  initLocation();
 }
-// 强制刷新并从服务器获取最新版本与定位
+
+// 强制刷新
 function forceUpdateApp() {
   const indicator = document.getElementById('ptrIndicator');
   const ptrText = document.getElementById('ptrText');
   if (indicator) {
     indicator.classList.add('refreshing');
-    if (ptrText) ptrText.innerText = '正在获取最新版本...';
+    if (ptrText) ptrText.innerText = '正在刷新最新版本...';
   }
 
-  // 通知 Service Worker 放弃旧缓存并更新
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.getRegistrations().then((registrations) => {
       for (let reg of registrations) {
@@ -709,14 +803,13 @@ function forceUpdateApp() {
     });
   }
 
-  // 0.4 秒动画后强制重载
   setTimeout(() => {
     window.location.reload();
   }, 400);
 }
 
-// 模拟原生 iOS 下拉刷新手势 (Pull-to-refresh)
-(function initPullToRefresh() {
+// 下拉刷新手势
+function initPullToRefresh() {
   let startY = 0;
   let currentY = 0;
   let isPulling = false;
@@ -770,4 +863,4 @@ function forceUpdateApp() {
     startY = 0;
     currentY = 0;
   });
-})();
+}
