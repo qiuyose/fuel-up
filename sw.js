@@ -1,11 +1,14 @@
-﻿const CACHE_NAME = 'fuel-up-v2';
+const CACHE_NAME = 'fuel-up-v4';
 const ASSETS = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json',
-  './icon.svg'
+  './manifest.json?v=20261021',
+  './icon.svg?v=20261021',
+  './apple-touch-icon.png?v=20261021',
+  './icon-192.png?v=20261021',
+  './icon-512.png?v=20261021'
 ];
 
 self.addEventListener('install', (e) => {
@@ -37,7 +40,6 @@ self.addEventListener('fetch', (e) => {
     return;
   }
   
-  // 网络优先策略：尝试获取最新文件，网络不通时自动读取本地缓存
   e.respondWith(
     fetch(e.request)
       .then((networkResponse) => {

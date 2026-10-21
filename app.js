@@ -787,25 +787,33 @@ function closeSettingsModal() {
 }
 
 // 强制刷新
-function forceUpdateApp() {
+async function forceUpdateApp() {
   const indicator = document.getElementById('ptrIndicator');
   const ptrText = document.getElementById('ptrText');
   if (indicator) {
     indicator.classList.add('refreshing');
-    if (ptrText) ptrText.innerText = '正在刷新最新版本...';
+    if (ptrText) ptrText.innerText = '正在清除缓存并更新...';
+  }
+
+  if ('caches' in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    } catch(e) {}
   }
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
+    try {
+      const registrations = await navigator.serviceWorker.getRegistrations();
       for (let reg of registrations) {
-        reg.update();
+        await reg.unregister();
       }
-    });
+    } catch(e) {}
   }
 
   setTimeout(() => {
-    window.location.reload();
-  }, 400);
+    window.location.href = window.location.pathname + '?reload=' + Date.now();
+  }, 500);
 }
 
 // 下拉刷新手势

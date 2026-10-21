@@ -1,13 +1,137 @@
-﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="87 82 1080 1087" width="512" height="512">
   <defs>
-    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#007AFF"/>
-      <stop offset="100%" stop-color="#0051A8"/>
+    <!-- 1. 全幅白瓷微光底座 (去掉了周围所有黑框，符合 iOS 全铺满规范) -->
+    <linearGradient id="bgPlate" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="60%" stop-color="#F8FAFD"/>
+      <stop offset="100%" stop-color="#EEF2F7"/>
     </linearGradient>
+
+    <!-- 顶部天光柔和漫反射 -->
+    <radialGradient id="plateLight" cx="50%" cy="15%" r="70%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.8"/>
+      <stop offset="60%" stop-color="#F1F5F9" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#E2E8F0" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 2. 加油枪与深色仪表盘金属质感渐变 (深空钛黑 Midnight Titanium) -->
+    <linearGradient id="darkTitanium" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2D3A4B"/>
+      <stop offset="35%" stop-color="#222C3A"/>
+      <stop offset="75%" stop-color="#18202A"/>
+      <stop offset="100%" stop-color="#0F141B"/>
+    </linearGradient>
+
+    <!-- 仪表盘深色弧独立渐变 (沿弧度自然光影) -->
+    <linearGradient id="arcTitanium" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#25303E"/>
+      <stop offset="50%" stop-color="#1C2430"/>
+      <stop offset="100%" stop-color="#131922"/>
+    </linearGradient>
+
+    <!-- 3. 绿色满油能量弧极光渐变 (透亮翡翠绿) -->
+    <linearGradient id="greenArcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00D26A"/>
+      <stop offset="40%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- 4. 晶莹水滴金橙琥珀渐变 (Luminous Amber Crystal) -->
+    <linearGradient id="dropGrad" x1="20%" y1="0%" x2="80%" y2="100%">
+      <stop offset="0%" stop-color="#FFE600"/>
+      <stop offset="35%" stop-color="#FFB300"/>
+      <stop offset="75%" stop-color="#FF8C00"/>
+      <stop offset="100%" stop-color="#FF4D00"/>
+    </linearGradient>
+
+    <!-- 水滴内部果冻高光渐变 -->
+    <linearGradient id="dropGlint" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0.6"/>
+    </linearGradient>
+
+    <!-- 5. 扳机微立体强调质感 -->
+    <linearGradient id="triggerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3A485B"/>
+      <stop offset="100%" stop-color="#151C24"/>
+    </linearGradient>
+
+    <!-- 6. 底部文字 Fuel Up 沉稳碳素黑质感 -->
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#283342"/>
+      <stop offset="100%" stop-color="#141922"/>
+    </linearGradient>
+
+    <!-- 滤镜: 加油枪与表盘立体悬浮柔和投影 -->
+    <filter id="heroShadow" x="-10%" y="-10%" width="125%" height="125%">
+      <feDropShadow dx="0" dy="16" stdDeviation="16" flood-color="#0C141F" flood-opacity="0.18"/>
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#0C141F" flood-opacity="0.14"/>
+    </filter>
+
+    <!-- 滤镜: 绿色能量弧辉光 -->
+    <filter id="greenGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="0" stdDeviation="8" flood-color="#10B981" flood-opacity="0.4"/>
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#059669" flood-opacity="0.25"/>
+    </filter>
+
+    <!-- 滤镜: 水滴璀璨光晕与立体阴影 -->
+    <filter id="dropShadow" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#E65100" flood-opacity="0.32"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="10" flood-color="#FFB300" flood-opacity="0.45"/>
+    </filter>
+
+    <!-- 滤镜: 文字沉稳微投影 -->
+    <filter id="textShadow" x="-5%" y="-10%" width="115%" height="130%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#0C141F" flood-opacity="0.12"/>
+    </filter>
   </defs>
-  <rect width="512" height="512" rx="110" fill="url(#bgGrad)"/>
-  <path d="M340 120 C360 120 375 135 375 155 L375 340 C375 365 355 385 330 385 C305 385 285 365 285 340 L285 230 C285 210 270 195 250 195 L220 195 L220 360 C220 380 205 395 185 395 L155 395 C135 395 120 380 120 360 L120 180 C120 155 140 135 165 135 L250 135 C275 135 295 155 295 180 L295 335 C295 345 303 355 315 355 C327 355 335 345 335 335 L335 155 C335 152 337 150 340 150 Z" fill="#FFFFFF"/>
-  <circle cx="200" cy="250" r="45" fill="none" stroke="#007AFF" stroke-width="10"/>
-  <path d="M200 250 L225 230" stroke="#FF9500" stroke-width="8" stroke-linecap="round"/>
-  <path d="M375 220 C375 220 405 260 405 280 C405 296 392 310 375 310 C358 310 345 296 345 280 C345 260 375 220 375 220 Z" fill="#34C759"/>
+
+  <!-- 1. 平铺白瓷底板 (无黑框，完全铺满) -->
+  <rect x="87" y="82" width="1080" height="1087" fill="url(#bgPlate)"/>
+  <rect x="87" y="82" width="1080" height="1087" fill="url(#plateLight)"/>
+
+  <!-- 2. 仪表盘与刻度线 (金属质感 + 立体投影) -->
+  <g filter="url(#heroShadow)">
+    <!-- 仪表盘深色弧 -->
+    <path d="M 605 216 L 652 216 L 685 220 L 720 228 L 761 243 L 779 252 L 783 256 L 783 262 L 766 290 L 758 293 L 715 274 L 680 265 L 651 261 L 604 261 L 571 266 L 545 273 L 523 281 L 492 296 L 464 314 L 435 338 L 402 375 L 384 402 L 366 438 L 355 470 L 347 510 L 344 555 L 338 559 L 306 558 L 302 553 L 303 514 L 308 479 L 318 442 L 331 409 L 342 387 L 360 358 L 380 332 L 409 302 L 429 285 L 478 253 L 501 242 L 540 228 L 574 220 L 605 216 Z" fill="url(#arcTitanium)"/>
+    
+    <!-- 3个刻度线 -->
+    <path d="M 374 533 L 428 533 L 433 538 L 433 554 L 426 559 L 373 558 L 369 553 L 369 538 L 374 533 Z" fill="url(#darkTitanium)"/>
+    <path d="M 443 362 L 452 363 L 487 397 L 488 405 L 486 409 L 478 416 L 468 416 L 433 383 L 432 373 L 443 362 Z" fill="url(#darkTitanium)"/>
+    <path d="M 615 283 L 629 283 L 632 284 L 636 290 L 636 341 L 634 345 L 629 348 L 615 348 L 609 342 L 609 290 L 610 287 L 615 283 Z" fill="url(#darkTitanium)"/>
+  </g>
+
+  <!-- 3. 绿色满油能量弧 (极光渐变 + 环境发光光晕) -->
+  <path d="M 807 272 L 814 273 L 844 296 L 870 322 L 892 350 L 910 379 L 927 416 L 939 455 L 936 462 L 930 463 L 925 461 L 887 442 L 884 439 L 880 426 L 869 403 L 848 370 L 835 354 L 810 329 L 786 310 L 785 304 L 787 300 L 802 276 L 807 272 Z" fill="url(#greenArcGrad)" filter="url(#greenGlow)"/>
+
+  <!-- 4. 加油枪主体与扳机 (深空钛黑 + 柔和立体悬浮投影) -->
+  <g filter="url(#heroShadow)">
+    <!-- 枪身外壳带镂空护圈 -->
+    <path d="M 655 429 L 663 429 L 672 434 L 675 439 L 681 461 L 684 464 L 689 464 L 748 446 L 767 442 L 793 442 L 825 451 L 900 486 L 905 490 L 907 495 L 906 500 L 889 535 L 884 538 L 877 538 L 814 507 L 788 497 L 767 498 L 704 517 L 701 520 L 701 525 L 709 550 L 709 557 L 705 568 L 577 746 L 560 765 L 548 772 L 531 777 L 514 777 L 498 773 L 477 761 L 405 699 L 399 698 L 368 727 L 357 742 L 350 759 L 347 778 L 348 785 L 344 792 L 299 792 L 295 786 L 295 772 L 298 752 L 305 730 L 321 702 L 347 674 L 500 528 L 515 497 L 528 480 L 542 468 L 556 460 L 655 429 Z M 553 585 L 562 585 L 572 589 L 598 610 L 604 627 L 603 646 L 594 665 L 550 725 L 536 737 L 530 739 L 516 739 L 504 733 L 475 707 L 456 688 L 455 680 L 464 669 L 545 588 L 553 585 Z" fill="url(#darkTitanium)" fill-rule="evenodd"/>
+    
+    <!-- 扳机 (独立微立体质感) -->
+    <path d="M 544 614 L 551 614 L 558 618 L 562 622 L 563 630 L 509 703 L 505 707 L 499 707 L 487 697 L 485 688 L 537 619 L 544 614 Z" fill="url(#triggerGrad)"/>
+  </g>
+
+  <!-- 5. 晶莹跳跃能量油滴 (水晶流光蜜糖金 + 月牙高光 + 璀璨光晕) -->
+  <g filter="url(#dropShadow)">
+    <!-- 油滴主体 -->
+    <path d="M 896 553 L 902 554 L 905 557 L 944 617 L 962 650 L 968 665 L 971 679 L 971 700 L 969 709 L 962 726 L 955 736 L 936 752 L 920 759 L 903 762 L 891 762 L 875 759 L 852 747 L 839 734 L 834 726 L 825 700 L 826 673 L 833 652 L 867 592 L 890 557 L 896 553 Z" fill="url(#dropGrad)"/>
+    
+    <!-- 油滴原图月牙高光 (升级为晶莹通透果冻反光) -->
+    <path d="M 916 650 L 922 650 L 925 653 L 936 679 L 937 690 L 915 690 L 916 678 L 911 662 L 911 657 L 913 652 L 916 650 Z" fill="url(#dropGlint)"/>
+  </g>
+
+  <!-- 6. 底部文字 Fuel Up (精准字形 + 沉稳碳素黑质感 + 立体下沉投影) -->
+  <g filter="url(#textShadow)">
+    <path d="M 291 853 L 389 853 L 392 856 L 392 878 L 387 882 L 319 883 L 320 909 L 380 909 L 385 914 L 385 935 L 382 938 L 321 938 L 319 940 L 319 987 L 315 992 L 289 992 L 286 988 L 286 859 L 288 855 L 291 853 Z" fill="url(#textGrad)"/>
+    <path d="M 407 888 L 430 888 L 433 890 L 435 955 L 442 964 L 449 967 L 456 967 L 464 964 L 472 954 L 474 890 L 477 888 L 500 888 L 504 891 L 504 989 L 501 992 L 476 992 L 473 988 L 472 982 L 459 992 L 447 995 L 438 995 L 428 993 L 418 988 L 410 980 L 405 970 L 403 962 L 403 892 L 407 888 Z" fill="url(#textGrad)"/>
+    <path d="M 570 885 L 589 887 L 607 896 L 619 910 L 625 928 L 625 946 L 621 949 L 551 950 L 552 956 L 556 962 L 568 969 L 577 970 L 586 968 L 601 958 L 620 971 L 620 975 L 608 986 L 598 991 L 582 995 L 561 994 L 551 991 L 540 985 L 531 977 L 526 970 L 521 959 L 519 950 L 519 930 L 522 919 L 529 906 L 539 896 L 547 891 L 558 887 L 570 885 Z M 571 911 L 580 912 L 586 915 L 591 920 L 593 927 L 552 927 L 555 920 L 559 916 L 571 911 Z" fill="url(#textGrad)" fill-rule="evenodd"/>
+    <path d="M 644 844 L 666 844 L 671 849 L 671 988 L 667 992 L 643 992 L 639 987 L 639 850 L 640 847 L 644 844 Z" fill="url(#textGrad)"/>
+    <path d="M 735 851 L 759 852 L 762 856 L 762 944 L 766 954 L 772 960 L 783 964 L 793 964 L 803 960 L 808 955 L 812 947 L 814 854 L 816 852 L 840 851 L 846 855 L 845 952 L 842 962 L 836 973 L 822 986 L 804 993 L 776 994 L 761 990 L 751 985 L 738 972 L 733 962 L 729 946 L 729 856 L 732 852 L 735 851 Z" fill="url(#textGrad)"/>
+    <path d="M 922 885 L 937 886 L 950 891 L 955 894 L 969 910 L 973 919 L 976 935 L 975 951 L 972 962 L 967 972 L 956 984 L 940 992 L 930 994 L 915 993 L 903 988 L 896 982 L 894 1033 L 890 1036 L 865 1035 L 863 1032 L 863 892 L 867 888 L 891 888 L 893 889 L 894 897 L 896 898 L 903 891 L 912 887 L 922 885 Z M 918 914 L 932 918 L 939 926 L 942 934 L 942 944 L 938 954 L 931 961 L 923 964 L 915 964 L 906 961 L 899 954 L 895 943 L 896 931 L 899 924 L 905 918 L 918 914 Z" fill="url(#textGrad)" fill-rule="evenodd"/>
+  </g>
+
+  <!-- 7. iOS 规范: 1px 极细腻内倒角边缘 (高级质感细节) -->
+  <rect x="88" y="83" width="1078" height="1085" fill="none" stroke="#000000" stroke-opacity="0.05" stroke-width="2"/>
 </svg>
