@@ -1,7 +1,7 @@
-﻿let currentVendor = 'qwen'; // 'qwen' 或 'glm'
+﻿let currentVendor = 'qwen'; // 'qwen' | 'glm' | 'all'
 let cachedOnlineModels = []; // 上游拉取到的全部模型
 
-// 实时向硅基流动接口拉取在线模型
+// 实时向用户填写的 Base URL 接口拉取在线模型 (/models)
 async function fetchOnlineModels(isManualClick = false) {
   const settings = getSettings();
   const apiInput = document.getElementById('settingApiKey');
@@ -20,12 +20,15 @@ async function fetchOnlineModels(isManualClick = false) {
   const badge = document.getElementById('modelCountBadge');
 
   if (!apiKey) {
-    if (isManualClick) alert('请先填入 API Key 才能拉取硅基流动后台的模型列表！');
+    if (isManualClick) alert('请先填入 API Key 和 API 服务地址才能拉取模型列表！');
     renderVendorModels();
     return;
   }
 
   if (badge) badge.innerText = '正在拉取上游模型...';
+
+  let host = baseUrl;
+  try { host = new URL(baseUrl).host; } catch(e) {}
 
   try {
     const res = await fetch(`${baseUrl}/models`, {
@@ -45,25 +48,27 @@ async function fetchOnlineModels(isManualClick = false) {
       localStorage.setItem('cached_vision_models', JSON.stringify(cachedOnlineModels));
       renderVendorModels();
       if (isManualClick) {
-        alert('拉取成功！已自动加载上游所有可用的千问/智谱视觉模型。');
+        alert(`拉取成功！已从 ${host} 成功拉取到 ${cachedOnlineModels.length} 个模型，并已自动过滤视觉模型。`);
       }
     }
   } catch (err) {
     console.warn('拉取上游模型失败，使用本地兜底列表:', err);
     if (isManualClick) {
-      alert(`拉取失败 (${err.message})\n可能网络受阻或 Key 有误，已加载备选列表。`);
+      alert(`拉取失败 (${err.message})\n目标地址: ${host}\n请检查网络连接、Base URL 或 API Key 是否有效。已加载备用模型列表。`);
     }
     renderVendorModels();
   }
 }
 
-// 切换供应商标签 (千问 / 智谱)
+// 切换供应商分类标签 (千问 / 智谱 / 全部视觉)
 function switchVendor(vendor) {
   currentVendor = vendor;
   const btnQwen = document.getElementById('btnVendorQwen');
   const btnGlm = document.getElementById('btnVendorGlm');
+  const btnAll = document.getElementById('btnVendorAll');
   if (btnQwen) btnQwen.classList.toggle('active', vendor === 'qwen');
   if (btnGlm) btnGlm.classList.toggle('active', vendor === 'glm');
+  if (btnAll) btnAll.classList.toggle('active', vendor === 'all');
   renderVendorModels();
 }
 
@@ -81,7 +86,7 @@ function renderVendorModels() {
     } catch(e) { allModels = []; }
   }
 
-  // 本地通用兜底（包含用户测通的 Qwen3-VL 等）
+  // 本地通用兜底模型列表
   const fallbackQwen = [
     'Qwen/Qwen3-VL',
     'Qwen/Qwen2.5-VL-7B-Instruct',
@@ -96,19 +101,28 @@ function renderVendorModels() {
 
   let filtered = [];
   if (currentVendor === 'qwen') {
-    // 过滤千问系包含 vl 或 vision 的模型
+    // 过滤千问系包含 vl 或 vision 的多模态视觉模型
     filtered = allModels.filter(id => {
       const lower = id.toLowerCase();
       return lower.includes('qwen') && (lower.includes('vl') || lower.includes('vision'));
     });
     if (filtered.length === 0) filtered = fallbackQwen;
-  } else {
-    // 过滤智谱系包含 glm/thudm 且包含 4v/vl/vision 的模型
+  } else if (currentVendor === 'glm') {
+    // 过滤智谱系包含 glm/thudm 且包含 4v/vl/vision 的视觉模型
     filtered = allModels.filter(id => {
       const lower = id.toLowerCase();
       return (lower.includes('glm') || lower.includes('thudm') || lower.includes('zhipu')) && (lower.includes('v') || lower.includes('vision'));
     });
     if (filtered.length === 0) filtered = fallbackGlm;
+  } else {
+    // 全部视觉模型（含第三方 OpenAI 格式等多模态模型）
+    filtered = allModels.filter(id => {
+      const lower = id.toLowerCase();
+      return lower.includes('vl') || lower.includes('vision') || lower.includes('4v') || lower.includes('gpt-4o') || lower.includes('claude');
+    });
+    if (filtered.length === 0) {
+      filtered = [...fallbackQwen, ...fallbackGlm, 'gpt-4o', 'gpt-4o-mini'];
+    }
   }
 
   if (badge) {
@@ -135,7 +149,7 @@ function renderVendorModels() {
   optCustom.innerText = '✍️ 手动输入其它模型...';
   select.appendChild(optCustom);
 
-  // 如果用户当前配置了一个不在筛选列表里的模型（例如手打的），保留它在首位
+  // 如果用户当前配置的模型不在筛选列表里（例如自定义输入的），保留在首位展示
   if (!hasMatch && currentVal) {
     const optCurrent = document.createElement('option');
     optCurrent.value = currentVal;
@@ -159,7 +173,6 @@ function onDynamicModelChanged(val) {
     input.focus();
   }
 }
-
 // Fuel Up - 核心逻辑 (v1.3 密码掩码与直观状态版)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
@@ -884,11 +897,14 @@ function openSettingsModal() {
   const modelInput = document.getElementById('settingModel');
   if (modelInput) modelInput.value = currentModel;
 
-  // 根据当前模型名称自动判断供应商选项卡 (千问 vs 智谱)
-  if (currentModel.toLowerCase().includes('glm') || currentModel.toLowerCase().includes('thudm')) {
+  // 根据当前模型名称自动判断供应商选项卡
+  const lowerModel = currentModel.toLowerCase();
+  if (lowerModel.includes('glm') || lowerModel.includes('thudm') || lowerModel.includes('zhipu')) {
     switchVendor('glm');
-  } else {
+  } else if (lowerModel.includes('qwen')) {
     switchVendor('qwen');
+  } else {
+    switchVendor('all');
   }
 
   // 尝试自动静默拉取一次
