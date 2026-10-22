@@ -1,14 +1,165 @@
-﻿function onModelSelectChanged(val) {
+﻿let currentVendor = 'qwen'; // 'qwen' 或 'glm'
+let cachedOnlineModels = []; // 上游拉取到的全部模型
+
+// 实时向硅基流动接口拉取在线模型
+async function fetchOnlineModels(isManualClick = false) {
+  const settings = getSettings();
+  const apiInput = document.getElementById('settingApiKey');
+  // 如果输入框有值且不是掩码，优先用输入框里的；否则用 settings 里的真实 Key
+  let apiKey = settings.apiKey || '';
+  if (apiInput && apiInput.value && apiInput.value !== MASK_PLACEHOLDER) {
+    apiKey = apiInput.value.trim();
+  }
+
+  let baseUrl = (document.getElementById('settingBaseUrl')?.value || settings.baseUrl || 'https://api.siliconflow.cn/v1').trim();
+  baseUrl = baseUrl.replace(/\/+$/, '');
+  if (baseUrl.endsWith('/chat/completions')) {
+    baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+  }
+
+  const badge = document.getElementById('modelCountBadge');
+
+  if (!apiKey) {
+    if (isManualClick) alert('请先填入 API Key 才能拉取硅基流动后台的模型列表！');
+    renderVendorModels();
+    return;
+  }
+
+  if (badge) badge.innerText = '正在拉取上游模型...';
+
+  try {
+    const res = await fetch(`${baseUrl}/models`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data && Array.isArray(data.data)) {
+      cachedOnlineModels = data.data.map(m => m.id);
+      localStorage.setItem('cached_vision_models', JSON.stringify(cachedOnlineModels));
+      renderVendorModels();
+      if (isManualClick) {
+        alert('拉取成功！已自动加载上游所有可用的千问/智谱视觉模型。');
+      }
+    }
+  } catch (err) {
+    console.warn('拉取上游模型失败，使用本地兜底列表:', err);
+    if (isManualClick) {
+      alert(`拉取失败 (${err.message})\n可能网络受阻或 Key 有误，已加载备选列表。`);
+    }
+    renderVendorModels();
+  }
+}
+
+// 切换供应商标签 (千问 / 智谱)
+function switchVendor(vendor) {
+  currentVendor = vendor;
+  const btnQwen = document.getElementById('btnVendorQwen');
+  const btnGlm = document.getElementById('btnVendorGlm');
+  if (btnQwen) btnQwen.classList.toggle('active', vendor === 'qwen');
+  if (btnGlm) btnGlm.classList.toggle('active', vendor === 'glm');
+  renderVendorModels();
+}
+
+// 渲染符合当前供应商的视觉模型下拉列表
+function renderVendorModels() {
+  const select = document.getElementById('selectDynamicModel');
+  const input = document.getElementById('settingModel');
+  const badge = document.getElementById('modelCountBadge');
+  if (!select) return;
+
+  let allModels = cachedOnlineModels;
+  if (!allModels || allModels.length === 0) {
+    try {
+      allModels = JSON.parse(localStorage.getItem('cached_vision_models')) || [];
+    } catch(e) { allModels = []; }
+  }
+
+  // 本地通用兜底（包含用户测通的 Qwen3-VL 等）
+  const fallbackQwen = [
+    'Qwen/Qwen3-VL',
+    'Qwen/Qwen2.5-VL-7B-Instruct',
+    'Pro/Qwen/Qwen2.5-VL-7B-Instruct',
+    'Qwen/Qwen2-VL-7B-Instruct'
+  ];
+  const fallbackGlm = [
+    'THUDM/glm-4v-9b',
+    'THUDM/GLM-4V',
+    'ZhipuAI/glm-4v'
+  ];
+
+  let filtered = [];
+  if (currentVendor === 'qwen') {
+    // 过滤千问系包含 vl 或 vision 的模型
+    filtered = allModels.filter(id => {
+      const lower = id.toLowerCase();
+      return lower.includes('qwen') && (lower.includes('vl') || lower.includes('vision'));
+    });
+    if (filtered.length === 0) filtered = fallbackQwen;
+  } else {
+    // 过滤智谱系包含 glm/thudm 且包含 4v/vl/vision 的模型
+    filtered = allModels.filter(id => {
+      const lower = id.toLowerCase();
+      return (lower.includes('glm') || lower.includes('thudm') || lower.includes('zhipu')) && (lower.includes('v') || lower.includes('vision'));
+    });
+    if (filtered.length === 0) filtered = fallbackGlm;
+  }
+
+  if (badge) {
+    badge.innerText = `找到 ${filtered.length} 个模型`;
+  }
+
+  const currentVal = input ? input.value.trim() : '';
+  select.innerHTML = '';
+
+  let hasMatch = false;
+  filtered.forEach(id => {
+    const opt = document.createElement('option');
+    opt.value = id;
+    opt.innerText = id;
+    if (id === currentVal) {
+      opt.selected = true;
+      hasMatch = true;
+    }
+    select.appendChild(opt);
+  });
+
+  const optCustom = document.createElement('option');
+  optCustom.value = 'custom';
+  optCustom.innerText = '✍️ 手动输入其它模型...';
+  select.appendChild(optCustom);
+
+  // 如果用户当前配置了一个不在筛选列表里的模型（例如手打的），保留它在首位
+  if (!hasMatch && currentVal) {
+    const optCurrent = document.createElement('option');
+    optCurrent.value = currentVal;
+    optCurrent.innerText = `当前使用: ${currentVal}`;
+    optCurrent.selected = true;
+    select.insertBefore(optCurrent, select.firstChild);
+  } else if (!currentVal && filtered.length > 0) {
+    select.value = filtered[0];
+    if (input) input.value = filtered[0];
+  }
+}
+
+function onDynamicModelChanged(val) {
   const input = document.getElementById('settingModel');
   if (!input) return;
   if (val !== 'custom') {
     input.value = val;
   } else {
     input.value = '';
-    input.placeholder = '请输入自定义模型名称';
+    input.placeholder = '输入自定义模型名称';
     input.focus();
   }
 }
+
 // Fuel Up - 核心逻辑 (v1.3 密码掩码与直观状态版)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
@@ -729,21 +880,24 @@ function openSettingsModal() {
   }
 
   document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
-  const currentModel = settings.model || 'Qwen/Qwen2.5-VL-7B-Instruct';
+  const currentModel = settings.model || 'Qwen/Qwen3-VL';
   const modelInput = document.getElementById('settingModel');
-  const modelSelect = document.getElementById('selectModelPreset');
   if (modelInput) modelInput.value = currentModel;
-  if (modelSelect) {
-    let matched = false;
-    for (let i = 0; i < modelSelect.options.length; i++) {
-      if (modelSelect.options[i].value === currentModel) {
-        modelSelect.value = currentModel;
-        matched = true;
-        break;
-      }
-    }
-    if (!matched) modelSelect.value = 'custom';
+
+  // 根据当前模型名称自动判断供应商选项卡 (千问 vs 智谱)
+  if (currentModel.toLowerCase().includes('glm') || currentModel.toLowerCase().includes('thudm')) {
+    switchVendor('glm');
+  } else {
+    switchVendor('qwen');
   }
+
+  // 尝试自动静默拉取一次
+  if (settings.apiKey) {
+    fetchOnlineModels(false);
+  } else {
+    renderVendorModels();
+  }
+
   document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   document.getElementById('settingsModal').classList.add('show');
 }

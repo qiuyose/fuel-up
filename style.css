@@ -686,3 +686,26 @@ select.ios-select {
 select.ios-select:focus {
   border-color: var(--primary);
 }
+/* 供应商切换胶囊 */
+.vendor-chip {
+  flex: 1;
+  height: 36px;
+  border-radius: 10px;
+  border: 1.5px solid var(--separator);
+  background: rgba(120, 120, 128, 0.08);
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.vendor-chip.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+  box-shadow: 0 2px 8px rgba(0, 122, 255, 0.25);
+}
