@@ -966,13 +966,10 @@ function dismissSettingsModal() {
   document.getElementById('settingsModal').classList.remove('show');
 }
 
-function setPresetConfig(preset) {
-  if (preset === 'siliconflow') {
-    document.getElementById('settingBaseUrl').value = 'https://api.siliconflow.cn/v1';
-    document.getElementById('settingModel').value = 'Qwen/Qwen2-VL-7B-Instruct';
-  } else if (preset === 'openai') {
-    document.getElementById('settingBaseUrl').value = 'https://api.openai.com/v1';
-    document.getElementById('settingModel').value = 'gpt-4o-mini';
+// 点击遮罩暗色空白处直接退出
+function handleModalOverlayClick(e) {
+  if (e.target && e.target.id === 'settingsModal') {
+    dismissSettingsModal();
   }
 }
 

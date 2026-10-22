@@ -461,13 +461,19 @@ input:focus {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0,0,0,0.45);
-  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: none;
   align-items: center;
   justify-content: center;
-  z-index: 200;
-  padding: 20px;
+  z-index: 999;
+  /* 留足顶部与底部安全区，彻底避开 iPhone 顶部的刘海、灵动岛、时间与电量 */
+  padding-top: calc(env(safe-area-inset-top, 24px) + 26px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 24px);
+  padding-left: 16px;
+  padding-right: 16px;
+  box-sizing: border-box;
 }
 
 .modal-overlay.show {
@@ -476,18 +482,24 @@ input:focus {
 
 .modal-content {
   background: var(--card-bg);
-  border-radius: var(--radius);
+  border-radius: 20px;
   width: 100%;
-  max-width: 360px;
-  padding: 22px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+  max-width: 390px;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.modal-title {
-  font-size: 17px;
-  font-weight: 700;
-  margin-bottom: 14px;
-  text-align: center;
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 14px 16px 20px 16px;
 }
 
 .photo-preview-box {
@@ -584,40 +596,48 @@ input:focus {
   gap: 8px;
   align-items: center;
 }
-/* 弹窗顶部栏与关闭按钮 */
+/* 弹窗顶部栏与关闭按钮 (吸顶固定，手势增大) */
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 14px;
+  padding: 14px 18px;
+  border-bottom: 0.5px solid var(--separator);
+  background: var(--card-bg);
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .modal-header .modal-title {
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
   margin-bottom: 0;
   text-align: left;
+  color: var(--text-main);
 }
 
 .modal-close-btn {
-  background: rgba(120, 120, 128, 0.14);
+  background: rgba(120, 120, 128, 0.18);
   border: none;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  color: var(--text-muted);
-  font-size: 15px;
-  font-weight: 600;
-  transition: opacity 0.15s, background 0.15s;
+  color: var(--text-main);
+  font-size: 16px;
+  font-weight: 700;
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
 }
 
 .modal-close-btn:active {
-  opacity: 0.6;
-  background: rgba(120, 120, 128, 0.25);
+  opacity: 0.7;
+  transform: scale(0.92);
+  background: rgba(120, 120, 128, 0.32);
 }
 
 .label-row {

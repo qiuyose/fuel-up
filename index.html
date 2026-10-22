@@ -197,108 +197,107 @@
   </div>
 
   <!-- 设置与备份弹窗 -->
-  <div class="modal-overlay" id="settingsModal">
-    <div class="modal-content">
-      <!-- 弹窗标题与右上角 X 关闭按钮 -->
+  <div class="modal-overlay" id="settingsModal" onclick="handleModalOverlayClick(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <!-- 弹窗标题与右上角 X 关闭按钮 (吸顶固定，永不被遮挡) -->
       <div class="modal-header">
         <div class="modal-title">系统配置与数据管理</div>
         <button type="button" class="modal-close-btn" onclick="dismissSettingsModal()" title="直接关闭">✕</button>
       </div>
-      
-      
 
-      
+      <!-- 弹窗内部独立滚动主体 (支持顺畅向下滑动) -->
+      <div class="modal-body">
+        <!-- 通用视觉大模型配置模块 -->
+        <div style="background:rgba(120, 120, 128, 0.06); border-radius:14px; padding:12px; margin-bottom:12px;">
+          <div class="form-group" style="margin-bottom:8px;">
+            <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API 服务地址 (Base URL)</label>
+            <input type="text" id="settingBaseUrl" placeholder="例如：https://api.siliconflow.cn/v1" style="height:38px;font-size:13px;">
+          </div>
 
-            <!-- 通用视觉大模型配置模块 -->
-      <div style="background:rgba(120, 120, 128, 0.05); border-radius:14px; padding:12px; margin-bottom:14px;">
-        <div class="form-group" style="margin-bottom:10px;">
-          <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API 服务地址 (Base URL)</label>
-          <input type="text" id="settingBaseUrl" placeholder="例如：https://api.siliconflow.cn/v1" style="height:42px;font-size:14px;">
+          <div class="form-group" style="margin-bottom:8px;">
+            <div class="label-row">
+              <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API Key (密钥)</label>
+              <span id="badgeApiStatus" class="badge-status-configured" style="display:none;">已配置</span>
+            </div>
+            <div class="input-with-eye">
+              <input type="password" id="settingApiKey" placeholder="sk-..." onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:38px;font-size:13px;">
+              <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingApiKey')" title="显示/隐藏明文">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom:0;">
+            <div class="label-row">
+              <label style="font-size:12px;color:var(--text-muted);font-weight:600;">视觉模型选择</label>
+              <span id="modelCountBadge" style="font-size:11px;color:var(--primary);font-weight:600;"></span>
+            </div>
+            
+            <!-- 核心供应商快速分类（千问/智谱/全部） -->
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+              <button type="button" class="vendor-chip active" id="btnVendorQwen" onclick="switchVendor('qwen')">千问 (Qwen)</button>
+              <button type="button" class="vendor-chip" id="btnVendorGlm" onclick="switchVendor('glm')">智谱 (GLM)</button>
+              <button type="button" class="vendor-chip" id="btnVendorAll" onclick="switchVendor('all')">全部视觉</button>
+            </div>
+
+            <div class="label-row" style="margin-top:4px;">
+              <label style="font-size:11px;color:var(--text-muted)">在线模型列表</label>
+              <button type="button" onclick="fetchOnlineModels(true)" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;">
+                🔄 实时拉取上游模型
+              </button>
+            </div>
+            <select id="selectDynamicModel" class="ios-select" style="height:38px;font-size:13px;" onchange="onDynamicModelChanged(this.value)">
+              <option value="">点击上方“实时拉取”获取列表</option>
+            </select>
+
+            <input type="text" id="settingModel" placeholder="当前生效的模型ID" style="margin-top:6px;height:38px;font-size:13px;">
+            <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
+              填写服务地址后点击“实时拉取”，直接在下拉框点选即可生效。
+            </small>
+          </div>
         </div>
 
-        <div class="form-group" style="margin-bottom:10px;">
-          <div class="label-row">
-            <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API Key (密钥)</label>
-            <span id="badgeApiStatus" class="badge-status-configured" style="display:none;">已配置</span>
-          </div>
-          <div class="input-with-eye">
-            <input type="password" id="settingApiKey" placeholder="sk-..." onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:42px;font-size:14px;">
-            <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingApiKey')" title="显示/隐藏明文">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
+        <!-- 高德地图 Web 服务 Key 配置 -->
+        <div style="background:rgba(120, 120, 128, 0.06); border-radius:14px; padding:12px; margin-bottom:12px;">
+          <div class="form-group" style="margin-bottom:0;">
+            <div class="label-row">
+              <label style="font-size:12px;color:var(--text-muted);font-weight:600;">高德 Web 服务 Key (定位加油站)</label>
+              <span id="badgeAmapStatus" class="badge-status-configured" style="display:none;">已配置</span>
+            </div>
+            <div class="input-with-eye">
+              <input type="password" id="settingAmapKey" placeholder="高德开放平台申请的 Web服务 Key" onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:38px;font-size:13px;">
+              <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingAmapKey')" title="显示/隐藏明文">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
+              用于自动识别当前所在加油站名称与距离。
+            </small>
           </div>
         </div>
 
-        <div class="form-group" style="margin-bottom:0;">
-          <div class="label-row">
-            <label style="font-size:12px;color:var(--text-muted);font-weight:600;">视觉模型选择</label>
-            <span id="modelCountBadge" style="font-size:11px;color:var(--primary);font-weight:600;"></span>
-          </div>
-          
-          <!-- 核心供应商快速分类（千问/智谱/全部） -->
-          <div style="display:flex; gap:6px; margin-bottom:8px;">
-            <button type="button" class="vendor-chip active" id="btnVendorQwen" onclick="switchVendor('qwen')">千问 (Qwen)</button>
-            <button type="button" class="vendor-chip" id="btnVendorGlm" onclick="switchVendor('glm')">智谱 (GLM)</button>
-            <button type="button" class="vendor-chip" id="btnVendorAll" onclick="switchVendor('all')">全部视觉</button>
-          </div>
-
-          <div class="label-row" style="margin-top:4px;">
-            <label style="font-size:11px;color:var(--text-muted)">在线模型列表</label>
-            <button type="button" onclick="fetchOnlineModels(true)" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;">
-              🔄 实时拉取上游模型
-            </button>
-          </div>
-          <select id="selectDynamicModel" class="ios-select" onchange="onDynamicModelChanged(this.value)">
-            <option value="">点击上方“实时拉取”获取列表</option>
-          </select>
-
-          <input type="text" id="settingModel" placeholder="当前生效的模型ID" style="margin-top:8px;height:42px;font-size:14px;">
-          <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
-            可填写任意兼容服务地址，点击“实时拉取”自动发现可用视觉模型。
-          </small>
+        <!-- 基准初始里程 -->
+        <div class="form-group" style="margin-bottom:12px;">
+          <label style="font-size:12px;color:var(--text-muted);font-weight:600;">基准初始总里程 (km)</label>
+          <input type="number" id="settingBaseMileage" placeholder="例如：12500 (第一笔记录前的里程)" style="height:38px;font-size:13px;">
+          <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">用于第一笔记录准确核算续航与油耗。</small>
         </div>
+
+        <!-- 数据备份与迁移 -->
+        <div style="margin-bottom:14px;">
+          <label style="font-size:12px;color:var(--text-muted);font-weight:600;display:block;margin-bottom:6px;">本地数据备份与迁移</label>
+          <div style="display:flex; gap:8px;">
+            <button type="button" class="cam-btn" style="flex:1; height:36px; font-size:12px;" onclick="exportJSON()">📦 备份数据</button>
+            <label class="cam-btn" style="flex:1; height:36px; font-size:12px; margin:0; display:flex; align-items:center; justify-content:center; cursor:pointer;">
+              📥 恢复备份
+              <input type="file" accept=".json" class="hidden-input" onchange="importJSON(this)">
+            </label>
+          </div>
+        </div>
+
+        <!-- 保存并生效按钮 -->
+        <button class="btn-submit" onclick="closeSettingsModal()" style="margin-top:4px;">保存并生效</button>
       </div>
-
-      <!-- 高德地图 Web 服务 Key 配置 -->
-      <div style="background:rgba(120, 120, 128, 0.05); border-radius:14px; padding:12px; margin-bottom:14px;">
-        <div class="form-group" style="margin-bottom:0;">
-          <div class="label-row">
-            <label style="font-size:12px;color:var(--text-muted);font-weight:600;">高德地图 Web 服务 Key (定位加油站)</label>
-            <span id="badgeAmapStatus" class="badge-status-configured" style="display:none;">已配置</span>
-          </div>
-          <div class="input-with-eye">
-            <input type="password" id="settingAmapKey" placeholder="高德开放平台申请的 Web服务 Key" onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:42px;font-size:14px;">
-            <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingAmapKey')" title="显示/隐藏明文">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            </button>
-          </div>
-          <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
-            用于自动识别当前所在加油站名称与距离。
-          </small>
-        </div>
-      </div>
-
-      <!-- 基准初始里程 -->
-      <div class="form-group" style="margin-bottom:16px;">
-        <label style="font-size:12px;color:var(--text-muted);font-weight:600;">基准初始总里程 (km)</label>
-        <input type="number" id="settingBaseMileage" placeholder="例如：12500 (第一笔记录前的里程)" style="height:42px;font-size:14px;">
-        <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">用于第一笔加油记录也能准确推算区间续航与油耗。</small>
-      </div>
-
-      <!-- 数据备份与迁移 -->
-      <div style="margin-bottom:18px;">
-        <label style="font-size:12px;color:var(--text-muted);font-weight:600;display:block;margin-bottom:8px;">本地数据备份与迁移</label>
-        <div style="display:flex; gap:10px;">
-          <button type="button" class="cam-btn" style="flex:1; height:40px; font-size:13px;" onclick="exportJSON()">📦 备份所有数据</button>
-          <label class="cam-btn" style="flex:1; height:40px; font-size:13px; margin:0; display:flex; align-items:center; justify-content:center; cursor:pointer;">
-            📥 恢复备份
-            <input type="file" accept=".json" class="hidden-input" onchange="importJSON(this)">
-          </label>
-        </div>
-      </div>
-
-      <!-- 保存并生效按钮 -->
-      <button class="btn-submit" onclick="closeSettingsModal()">保存并生效</button>
     </div>
   </div>
 
