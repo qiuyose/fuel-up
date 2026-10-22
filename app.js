@@ -270,39 +270,71 @@ async function runOcrRecognition(type, base64Image) {
     badge.style.background = 'var(--primary)';
   }
 
-  try {
+    try {
     let baseUrl = (settings.baseUrl || 'https://api.siliconflow.cn/v1').trim();
     baseUrl = baseUrl.replace(/\/+$/, '');
     if (baseUrl.endsWith('/chat/completions')) {
       baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
     }
     const endpoint = `${baseUrl}/chat/completions`;
-    const model = (settings.model || 'Qwen/Qwen2-VL-7B-Instruct').trim();
+    let model = (settings.model || 'Qwen/Qwen2.5-VL-7B-Instruct').trim();
 
     const promptText = type === 'dashboard' 
       ? '请仔细识别图片中汽车仪表盘上的总里程数字（公里数km，通常显示在ODO或总里程旁边）。只输出纯JSON，不要输出markdown代码块，格式例如：{"mileage": 12345}'
       : '请仔细识别图片中加油机屏幕上的总金额(元)、加油升数(L)和单价(元/L)。只输出纯JSON，不要输出markdown代码块，格式例如：{"amount": 300.0, "volume": 39.5, "price": 7.59}';
 
-    const res = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${settings.apiKey.trim()}`
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: promptText },
-              { type: 'image_url', image_url: { url: base64Image } }
-            ]
+    // 辅助请求函数
+    const sendVisionRequest = async (targetModel) => {
+      return await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.apiKey.trim()}`
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: promptText },
+                { type: 'image_url', image_url: { url: base64Image } }
+              ]
+            }
+          ],
+          temperature: 0.1
+        })
+      });
+    };
+
+    let res = await sendVisionRequest(model);
+
+    // 如果提示模型不存在，自动尝试硅基流动候选视觉模型
+    if (!res.ok) {
+      const errClone = res.clone();
+      const firstErrText = await errClone.text();
+      if (firstErrText.includes('model does not exist') || res.status === 404) {
+        const fallbacks = [
+          'Qwen/Qwen2.5-VL-7B-Instruct',
+          'Qwen/Qwen2-VL-7B-Instruct',
+          'Pro/Qwen/Qwen2-VL-7B-Instruct',
+          'THUDM/glm-4v-9b'
+        ].filter(m => m !== model);
+
+        for (let altModel of fallbacks) {
+          if (badge) badge.innerText = `尝试切换 ${altModel.split('/')[1] || altModel}...`;
+          let retryRes = await sendVisionRequest(altModel);
+          if (retryRes.ok) {
+            res = retryRes;
+            model = altModel;
+            // 自动保存正常工作的模型
+            settings.model = model;
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+            break;
           }
-        ],
-        temperature: 0.1
-      })
-    });
+        }
+      }
+    }
 
     if (!res.ok) {
       const errText = await res.text();
@@ -312,12 +344,14 @@ async function runOcrRecognition(type, base64Image) {
         errMsg = errJson.message || errJson.error?.message || errMsg;
       } catch (e) {}
 
-      if (res.status === 400 && (errMsg.includes('support') || errMsg.includes('image') || errMsg.includes('vision') || errMsg.includes('parameter'))) {
-        alert(`【模型不支持视觉】当前模型 "${model}" 不支持图片！\n请在设置中将模型改为 Qwen/Qwen2-VL-7B-Instruct。`);
+      if (errMsg.includes('model does not exist')) {
+        alert(`【API 识别失败: 模型不存在】\n当前请求的模型：${model}\n服务地址：${baseUrl}\n\n解决办法：请点击右上角设置，在视觉模型处点击【Qwen2.5-VL】或【Pro版Qwen】一键切换并保存。`);
+      } else if (res.status === 400 && (errMsg.includes('support') || errMsg.includes('image') || errMsg.includes('vision'))) {
+        alert(`【模型不支持视觉】当前模型 "${model}" 不支持图片！\n请在设置中选择 Qwen2.5-VL 视觉模型。`);
       } else if (res.status === 401) {
-        alert('【API Key 错误】提示 401 未授权，请检查设置里的 API Key。');
+        alert('【API Key 错误】提示 401 未授权，请检查设置里的 API Key 是否复制完整。');
       } else {
-        alert(`API 识别失败: ${errMsg}`);
+        alert(`API 识别失败: ${errMsg}\n请求模型: ${model}`);
       }
 
       if (badge) {
@@ -681,7 +715,7 @@ function openSettingsModal() {
   }
 
   document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
-  document.getElementById('settingModel').value = settings.model || 'Qwen/Qwen2-VL-7B-Instruct';
+  document.getElementById('settingModel').value = settings.model || 'Qwen/Qwen2.5-VL-7B-Instruct';
   document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   document.getElementById('settingsModal').classList.add('show');
 }
