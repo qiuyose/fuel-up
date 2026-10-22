@@ -252,17 +252,21 @@
       </div>
 
       <div class="form-group">
-        <label style="font-size:12px;color:var(--text-muted)">识图视觉模型 (Model)</label>
-        <input type="text" id="settingModel" placeholder="Qwen/Qwen2.5-VL-7B-Instruct">
-        <!-- 快捷选择胶囊，避免手动打字打错 -->
-        <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">
-          <button type="button" class="cam-btn" style="height:26px; padding:0 8px; font-size:11px;" onclick="selectModelPreset('Qwen/Qwen2.5-VL-7B-Instruct')">Qwen2.5-VL(推荐)</button>
-          <button type="button" class="cam-btn" style="height:26px; padding:0 8px; font-size:11px;" onclick="selectModelPreset('Qwen/Qwen2-VL-7B-Instruct')">Qwen2-VL</button>
-          <button type="button" class="cam-btn" style="height:26px; padding:0 8px; font-size:11px;" onclick="selectModelPreset('Pro/Qwen/Qwen2-VL-7B-Instruct')">Pro版Qwen</button>
-          <button type="button" class="cam-btn" style="height:26px; padding:0 8px; font-size:11px;" onclick="selectModelPreset('THUDM/glm-4v-9b')">GLM-4V</button>
-        </div>
+        <label style="font-size:12px;color:var(--text-muted)">识图视觉模型 (快速选择)</label>
+        <select id="selectModelPreset" class="ios-select" onchange="onModelSelectChanged(this.value)">
+          <option value="Qwen/Qwen2.5-VL-7B-Instruct">Qwen2.5-VL (阿里最新 推荐)</option>
+          <option value="Qwen/Qwen2-VL-7B-Instruct">Qwen2-VL-7B (阿里通义2.0)</option>
+          <option value="Pro/Qwen/Qwen2.5-VL-7B-Instruct">Pro/Qwen2.5-VL (Pro通道)</option>
+          <option value="Pro/Qwen/Qwen2-VL-7B-Instruct">Pro/Qwen2-VL (Pro通道)</option>
+          <option value="THUDM/glm-4v-9b">GLM-4V-9B (智谱视觉)</option>
+          <option value="gpt-4o-mini">gpt-4o-mini (OpenAI官方)</option>
+          <option value="custom">✍️ 手动输入其他模型...</option>
+        </select>
+        
+        <!-- 自定义输入框（支持随时手动微调） -->
+        <input type="text" id="settingModel" placeholder="例如：Qwen/Qwen2.5-VL-7B-Instruct" style="margin-top:8px;">
         <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
-          提示：若提示 model does not exist，点击上方【Qwen2.5-VL】或【Pro版Qwen】一键切换。
+          上滑下拉框可一键挑选，也可直接在输入框修改。
         </small>
       </div>
 

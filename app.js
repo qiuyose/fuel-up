@@ -1,4 +1,15 @@
-﻿// Fuel Up - 核心逻辑 (v1.3 密码掩码与直观状态版)
+﻿function onModelSelectChanged(val) {
+  const input = document.getElementById('settingModel');
+  if (!input) return;
+  if (val !== 'custom') {
+    input.value = val;
+  } else {
+    input.value = '';
+    input.placeholder = '请输入自定义模型名称';
+    input.focus();
+  }
+}
+// Fuel Up - 核心逻辑 (v1.3 密码掩码与直观状态版)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
 const MASK_PLACEHOLDER = '••••••••••••••••'; // 掩码占位符
@@ -217,7 +228,7 @@ function handleImageCaptured(input, type) {
     const img = new Image();
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const maxDim = 800;
+      const maxDim = 480; // 仪表盘/加油机数字 480px 足够清晰，体积缩减 75%
       let width = img.width;
       let height = img.height;
       if (width > height && width > maxDim) {
@@ -230,8 +241,10 @@ function handleImageCaptured(input, type) {
       canvas.width = width;
       canvas.height = height;
       const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'medium';
       ctx.drawImage(img, 0, 0, width, height);
-      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.75);
+      const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.6);
 
       currentPhotos[type] = compressedDataUrl;
       renderPhotoThumb(type, compressedDataUrl);
@@ -280,10 +293,10 @@ async function runOcrRecognition(type, base64Image) {
     let model = (settings.model || 'Qwen/Qwen2.5-VL-7B-Instruct').trim();
 
     const promptText = type === 'dashboard' 
-      ? '请仔细识别图片中汽车仪表盘上的总里程数字（公里数km，通常显示在ODO或总里程旁边）。只输出纯JSON，不要输出markdown代码块，格式例如：{"mileage": 12345}'
-      : '请仔细识别图片中加油机屏幕上的总金额(元)、加油升数(L)和单价(元/L)。只输出纯JSON，不要输出markdown代码块，格式例如：{"amount": 300.0, "volume": 39.5, "price": 7.59}';
+      ? '提取汽车仪表盘总里程数(公里km)。只输出纯JSON:{"mileage":12345}'
+      : '提取加油机总金额(元)、升数(L)、单价(元/L)。只输出纯JSON:{"amount":300.0,"volume":39.5,"price":7.59}';
 
-    // 辅助请求函数
+    // 辅助请求函数 (增加 max_tokens 严格限制，消除大模型思考耗时)
     const sendVisionRequest = async (targetModel) => {
       return await fetch(endpoint, {
         method: 'POST',
@@ -302,6 +315,7 @@ async function runOcrRecognition(type, base64Image) {
               ]
             }
           ],
+          max_tokens: 60,
           temperature: 0.1
         })
       });
@@ -715,7 +729,21 @@ function openSettingsModal() {
   }
 
   document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
-  document.getElementById('settingModel').value = settings.model || 'Qwen/Qwen2.5-VL-7B-Instruct';
+  const currentModel = settings.model || 'Qwen/Qwen2.5-VL-7B-Instruct';
+  const modelInput = document.getElementById('settingModel');
+  const modelSelect = document.getElementById('selectModelPreset');
+  if (modelInput) modelInput.value = currentModel;
+  if (modelSelect) {
+    let matched = false;
+    for (let i = 0; i < modelSelect.options.length; i++) {
+      if (modelSelect.options[i].value === currentModel) {
+        modelSelect.value = currentModel;
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) modelSelect.value = 'custom';
+  }
   document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   document.getElementById('settingsModal').classList.add('show');
 }
