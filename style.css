@@ -468,6 +468,7 @@ input:focus {
   align-items: center;
   justify-content: center;
   z-index: 999;
+  overscroll-behavior: contain;
   /* 留足顶部与底部安全区，彻底避开 iPhone 顶部的刘海、灵动岛、时间与电量 */
   padding-top: calc(env(safe-area-inset-top, 24px) + 26px);
   padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 24px);

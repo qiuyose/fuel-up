@@ -916,6 +916,7 @@ function openSettingsModal() {
 
   document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   document.getElementById('settingsModal').classList.add('show');
+  document.body.style.overflow = 'hidden';
 }
 
 // 聚焦输入框时，如果是掩码，则自动清空供用户输入新Key
@@ -964,6 +965,7 @@ function togglePasswordVisibility(inputId) {
 // 右上角 X 直接关闭（不保存改动）
 function dismissSettingsModal() {
   document.getElementById('settingsModal').classList.remove('show');
+  document.body.style.overflow = '';
 }
 
 // 点击遮罩暗色空白处直接退出
@@ -1057,6 +1059,15 @@ function initPullToRefresh() {
   const ptrArrow = document.querySelector('.ptr-arrow');
 
   window.addEventListener('touchstart', (e) => {
+    // 弹窗处于打开状态或触摸发生在弹窗内部时，坚决不触发下拉刷新
+    const modal = document.getElementById('settingsModal');
+    if (modal && modal.classList.contains('show')) {
+      return;
+    }
+    if (e.target && e.target.closest && e.target.closest('.modal-overlay')) {
+      return;
+    }
+
     if (window.scrollY <= 2 && e.touches.length === 1) {
       startY = e.touches[0].pageY;
       isPulling = true;
@@ -1065,6 +1076,15 @@ function initPullToRefresh() {
 
   window.addEventListener('touchmove', (e) => {
     if (!isPulling) return;
+    const modal = document.getElementById('settingsModal');
+    if (modal && modal.classList.contains('show')) {
+      isPulling = false;
+      if (indicator) {
+        indicator.style.transform = '';
+        indicator.classList.remove('pulling');
+      }
+      return;
+    }
     currentY = e.touches[0].pageY;
     const diff = currentY - startY;
 
