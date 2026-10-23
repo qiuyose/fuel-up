@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'fuel-up-v9';
+﻿const CACHE_NAME = 'fuel-up-v10';
 const ASSETS = [
   './',
   './index.html',
