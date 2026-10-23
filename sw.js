@@ -1,8 +1,8 @@
-﻿const CACHE_NAME = 'fuel-up-v10';
+﻿const CACHE_NAME = 'fuel-up-v12';
 const ASSETS = [
   './',
   './index.html',
-  './style.css',
+  './style.css?v=20261023_liquid_white',
   './app.js',
   './manifest.json?v=20261021',
   './icon.svg?v=20261021',
