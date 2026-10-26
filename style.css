@@ -711,67 +711,6 @@ input:focus {
   padding: 3px 8px;
   border-radius: 6px;
 }
-/* 下拉刷新动画指示器 */
-#ptrIndicator {
-  position: fixed;
-  top: env(safe-area-inset-top);
-  left: 50%;
-  transform: translateX(-50%) translateY(-60px);
-  background: var(--card-bg);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--card-border);
-  padding: 8px 16px;
-  border-radius: 20px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--primary);
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
-  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s;
-  z-index: 1000;
-  opacity: 0;
-  pointer-events: none;
-}
-
-#ptrIndicator.pulling {
-  opacity: 1;
-}
-
-#ptrIndicator.refreshing {
-  transform: translateX(-50%) translateY(14px);
-  opacity: 1;
-}
-
-.ptr-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(0, 122, 255, 0.2);
-  border-top-color: var(--primary);
-  border-radius: 50%;
-  animation: ptrSpin 0.7s linear infinite;
-  display: none;
-}
-
-#ptrIndicator.refreshing .ptr-spinner {
-  display: block;
-}
-
-#ptrIndicator.refreshing .ptr-arrow {
-  display: none;
-}
-
-.ptr-arrow {
-  width: 16px;
-  height: 16px;
-  transition: transform 0.2s;
-}
-
-@keyframes ptrSpin {
-  to { transform: rotate(360deg); }
-}
 
 .header-actions {
   display: flex;

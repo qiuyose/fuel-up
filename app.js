@@ -191,7 +191,6 @@ window.addEventListener('DOMContentLoaded', () => {
   renderStats();
   renderHistory();
   registerServiceWorker();
-  initPullToRefresh();
 });
 
 // 1. 注册 PWA Service Worker
@@ -1017,107 +1016,67 @@ function closeSettingsModal() {
   initLocation();
 }
 
-// 强制刷新
-async function forceUpdateApp() {
-  const indicator = document.getElementById('ptrIndicator');
-  const ptrText = document.getElementById('ptrText');
-  if (indicator) {
-    indicator.classList.add('refreshing');
-    if (ptrText) ptrText.innerText = '正在清除缓存并更新...';
+// 13. 在线版本检查与按需手动更新（置于系统设置底部，按需触发，日常不干扰使用）
+async function checkAndUpdateApp() {
+  const btn = document.getElementById('btnUpdateApp');
+  const tip = document.getElementById('updateStatusTip');
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerText = '正在检查...';
+    btn.style.opacity = '0.7';
+  }
+  if (tip) {
+    tip.style.display = 'block';
+    tip.style.color = 'var(--text-muted)';
+    tip.innerText = '正在连接远端并清除本地旧缓存...';
   }
 
-  if ('caches' in window) {
-    try {
+  try {
+    // 1. 清理本地 CacheStorage 缓存
+    if ('caches' in window) {
       const keys = await caches.keys();
       await Promise.all(keys.map(k => caches.delete(k)));
-    } catch(e) {}
-  }
+    }
 
-  if ('serviceWorker' in navigator) {
-    try {
+    // 2. 注销旧的 Service Worker 实例
+    if ('serviceWorker' in navigator) {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (let reg of registrations) {
         await reg.unregister();
       }
-    } catch(e) {}
+    }
+
+    // 3. 校验网络连通性并拉取最新文件
+    const checkUrl = './index.html?check=' + Date.now();
+    const resp = await fetch(checkUrl, { cache: 'no-store' });
+    if (!resp.ok) {
+      throw new Error('网络响应异常: ' + resp.status);
+    }
+
+    if (tip) {
+      tip.style.color = 'var(--accent-green)';
+      tip.innerText = '✓ 已成功获取最新版本！正在重新载入...';
+    }
+    if (btn) {
+      btn.innerText = '更新完成';
+    }
+
+    // 4. 平滑重新载入最新应用界面
+    setTimeout(() => {
+      window.location.href = window.location.pathname + '?v=' + Date.now();
+    }, 700);
+
+  } catch (err) {
+    console.error('更新失败:', err);
+    if (tip) {
+      tip.style.color = 'var(--accent-red)';
+      tip.innerText = '网络连接失败，请检查网络后重试。';
+    }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerText = '重试更新';
+      btn.style.opacity = '1';
+    }
   }
-
-  setTimeout(() => {
-    window.location.href = window.location.pathname + '?reload=' + Date.now();
-  }, 500);
-}
-
-// 下拉刷新手势
-function initPullToRefresh() {
-  let startY = 0;
-  let currentY = 0;
-  let isPulling = false;
-  const threshold = 65;
-
-  const indicator = document.getElementById('ptrIndicator');
-  const ptrText = document.getElementById('ptrText');
-  const ptrArrow = document.querySelector('.ptr-arrow');
-
-  window.addEventListener('touchstart', (e) => {
-    // 弹窗处于打开状态或触摸发生在弹窗内部时，坚决不触发下拉刷新
-    const modal = document.getElementById('settingsModal');
-    if (modal && modal.classList.contains('show')) {
-      return;
-    }
-    if (e.target && e.target.closest && e.target.closest('.modal-overlay')) {
-      return;
-    }
-
-    if (window.scrollY <= 2 && e.touches.length === 1) {
-      startY = e.touches[0].pageY;
-      isPulling = true;
-    }
-  }, { passive: true });
-
-  window.addEventListener('touchmove', (e) => {
-    if (!isPulling) return;
-    const modal = document.getElementById('settingsModal');
-    if (modal && modal.classList.contains('show')) {
-      isPulling = false;
-      if (indicator) {
-        indicator.style.transform = '';
-        indicator.classList.remove('pulling');
-      }
-      return;
-    }
-    currentY = e.touches[0].pageY;
-    const diff = currentY - startY;
-
-    if (diff > 10 && window.scrollY <= 2) {
-      const translateY = Math.min(diff * 0.45 - 50, 20);
-      if (indicator) {
-        indicator.classList.add('pulling');
-        indicator.style.transform = `translateX(-50%) translateY(${translateY}px)`;
-        if (diff > threshold) {
-          if (ptrText) ptrText.innerText = '松开立即更新';
-          if (ptrArrow) ptrArrow.style.transform = 'rotate(180deg)';
-        } else {
-          if (ptrText) ptrText.innerText = '下拉刷新应用';
-          if (ptrArrow) ptrArrow.style.transform = 'rotate(0deg)';
-        }
-      }
-    }
-  }, { passive: true });
-
-  window.addEventListener('touchend', () => {
-    if (!isPulling) return;
-    const diff = currentY - startY;
-    isPulling = false;
-
-    if (diff > threshold && window.scrollY <= 2) {
-      forceUpdateApp();
-    } else {
-      if (indicator) {
-        indicator.style.transform = '';
-        indicator.classList.remove('pulling');
-      }
-    }
-    startY = 0;
-    currentY = 0;
-  });
 }
