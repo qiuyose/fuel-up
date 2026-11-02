@@ -17,7 +17,7 @@
   <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 
-  <link rel="stylesheet" href="style.css?v=20261026_clean">
+  <link rel="stylesheet" href="style.css?v=20261102_photofix">
 </head>
 <body style="background-color: #F2F2F7;">
 
@@ -307,6 +307,19 @@
           <div id="updateStatusTip" style="font-size:11px; color:var(--text-muted); margin-top:6px; display:none;"></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  
+  <!-- 原生质感全屏照片查看器 Lightbox (轻触背景或右上角✕直接关闭) -->
+  <div class="photo-viewer-overlay" id="photoViewerModal" onclick="closePhotoViewer()">
+    <div class="photo-viewer-header" onclick="event.stopPropagation()">
+      <span class="photo-viewer-title" id="photoViewerTitle">照片凭据预览</span>
+      <button type="button" class="photo-viewer-close" onclick="closePhotoViewer()" title="关闭预览">✕</button>
+    </div>
+    <div class="photo-viewer-content">
+      <img id="photoViewerImg" src="" alt="加油凭据照片" onclick="event.stopPropagation()">
+      <div class="photo-viewer-tip">轻触背景空白处或点击右上角 ✕ 关闭</div>
     </div>
   </div>
 

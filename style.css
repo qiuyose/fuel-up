@@ -697,6 +697,11 @@ input:focus {
   border-radius: 8px;
   object-fit: cover;
   border: 1px solid var(--separator);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.photo-thumb:active {
+  transform: scale(0.94);
 }
 
 .hidden-input {
@@ -853,4 +858,113 @@ select.ios-select:focus {
     0 3px 10px rgba(0, 113, 227, 0.3),
     inset 0 1.2px 1.2px rgba(255, 255, 255, 0.75);
   transform: translateY(-1px);
+}
+
+/* 原生 iOS 沉浸式照片全屏预览查看器 (LightBox) */
+.photo-viewer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  display: flex;
+  flex-direction: column;
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  touch-action: manipulation;
+}
+
+.photo-viewer-overlay.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.photo-viewer-header {
+  height: calc(env(safe-area-inset-top, 24px) + 54px);
+  padding-top: env(safe-area-inset-top, 24px);
+  padding-left: 20px;
+  padding-right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.65) 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+.photo-viewer-title {
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.photo-viewer-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #FFFFFF;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s, background 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.photo-viewer-close:active {
+  transform: scale(0.9);
+  background: rgba(255, 255, 255, 0.4);
+}
+
+.photo-viewer-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 16px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+#photoViewerImg {
+  max-width: 95vw;
+  max-height: calc(100vh - env(safe-area-inset-top, 24px) - env(safe-area-inset-bottom, 20px) - 110px);
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  transform: scale(0.96);
+  transition: transform 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.photo-viewer-overlay.show #photoViewerImg {
+  transform: scale(1);
+}
+
+.photo-viewer-tip {
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 12px;
+  letter-spacing: -0.1px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  user-select: none;
+  pointer-events: none;
+  padding-bottom: env(safe-area-inset-bottom, 12px);
 }

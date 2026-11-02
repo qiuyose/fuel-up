@@ -420,9 +420,10 @@ function handleImageCaptured(input, type) {
 
 function renderPhotoThumb(type, dataUrl) {
   const container = document.getElementById(type === 'dashboard' ? 'dashPhotoThumb' : 'meterPhotoThumb');
+  const label = type === 'dashboard' ? '仪表盘照片' : '加油机照片';
   container.innerHTML = `
     <div style="display:flex;align-items:center;gap:6px;">
-      <img src="${dataUrl}" class="photo-thumb" />
+      <img src="${dataUrl}" class="photo-thumb" title="点击查看大图" onclick="previewImage(this.src, '${label}')" />
       <span class="badge-ocr" id="badge_${type}">已留存照片</span>
     </div>
   `;
@@ -736,8 +737,8 @@ function renderHistory() {
 
         ${hasPhoto ? `
           <div style="display:flex; gap:8px; margin: 8px 0;">
-            ${r.photos.dashboard ? `<img src="${r.photos.dashboard}" class="photo-thumb" title="仪表盘照片" onclick="previewImage('${r.photos.dashboard}')">` : ''}
-            ${r.photos.meter ? `<img src="${r.photos.meter}" class="photo-thumb" title="加油机照片" onclick="previewImage('${r.photos.meter}')">` : ''}
+            ${r.photos.dashboard ? `<img src="${r.photos.dashboard}" class="photo-thumb" title="仪表盘照片" onclick="previewImage(this.src, '仪表盘照片')">` : ''}
+            ${r.photos.meter ? `<img src="${r.photos.meter}" class="photo-thumb" title="加油机照片" onclick="previewImage(this.src, '加油机照片')">` : ''}
           </div>
         ` : ''}
 
@@ -759,10 +760,39 @@ function deleteRecord(id) {
   renderHistory();
 }
 
-function previewImage(src) {
-  const w = window.open('');
-  w.document.write(`<img src="${src}" style="max-width:100%; height:auto; display:block; margin:auto;" />`);
+// 11. 照片全屏预览 Lightbox (彻底解决 window.open 导致的无法关闭/必须退出应用的严重BUG)
+function previewImage(src, title = '照片凭据预览') {
+  if (!src) return;
+  const modal = document.getElementById('photoViewerModal');
+  const img = document.getElementById('photoViewerImg');
+  const titleEl = document.getElementById('photoViewerTitle');
+  if (modal && img) {
+    img.src = src;
+    if (titleEl) titleEl.innerText = title;
+    modal.classList.add('show');
+  }
 }
+
+function closePhotoViewer() {
+  const modal = document.getElementById('photoViewerModal');
+  const img = document.getElementById('photoViewerImg');
+  if (modal) {
+    modal.classList.remove('show');
+    if (img) {
+      setTimeout(() => {
+        if (!modal.classList.contains('show')) img.src = '';
+      }, 240);
+    }
+  }
+}
+
+// 键盘 ESC 快捷关闭
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') {
+    closePhotoViewer();
+    dismissSettingsModal();
+  }
+});
 
 // 12. 视图切换
 function switchTab(tab) {
