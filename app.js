@@ -978,8 +978,11 @@ function handleKeyFocus(input) {
 function handleKeyBlur(input) {
   // 如果失焦且为空，恢复掩码显示以表明原来已配置
   const settings = getSettings();
-  const isAmap = input.id === 'settingAmapKey';
-  const existingKey = isAmap ? settings.amapKey : settings.apiKey;
+  let existingKey = '';
+  if (input.id === 'settingAmapKey') existingKey = settings.amapKey;
+  else if (input.id === 'settingApiKey') existingKey = settings.apiKey;
+  else if (input.id === 'settingGithubToken') existingKey = settings.githubToken;
+
   if (!input.value.trim() && existingKey) {
     input.value = MASK_PLACEHOLDER;
     input.dataset.masked = 'true';
@@ -995,8 +998,11 @@ function togglePasswordVisibility(inputId) {
 
   // 如果当前是掩码，并且用户切换到明文查看，展示真实 Key
   const settings = getSettings();
-  const isAmap = inputId === 'settingAmapKey';
-  const realKey = isAmap ? settings.amapKey : settings.apiKey;
+  let realKey = '';
+  if (inputId === 'settingAmapKey') realKey = settings.amapKey;
+  else if (inputId === 'settingApiKey') realKey = settings.apiKey;
+  else if (inputId === 'settingGithubToken') realKey = settings.githubToken;
+
   if (!isPwd) {
     // 切换回密文
     if (input.dataset.masked === 'true') {
@@ -1024,35 +1030,49 @@ function handleModalOverlayClick(e) {
 }
 
 // 点击保存并生效
-function closeSettingsModal() {
+async function closeSettingsModal() {
   const settings = getSettings();
   const apiInput = document.getElementById('settingApiKey');
   const amapInput = document.getElementById('settingAmapKey');
+  const ghInput = document.getElementById('settingGithubToken');
+  const gistInput = document.getElementById('settingGithubGistId');
 
   // 判断是否输入了新 Key，还是保持原样掩码
   let newApiKey = settings.apiKey || '';
-  if (apiInput.value.trim() && apiInput.value !== MASK_PLACEHOLDER) {
+  if (apiInput && apiInput.value.trim() && apiInput.value !== MASK_PLACEHOLDER) {
     newApiKey = apiInput.value.trim();
-  } else if (!apiInput.value.trim() && apiInput.dataset.masked !== 'true') {
+  } else if (apiInput && !apiInput.value.trim() && apiInput.dataset.masked !== 'true') {
     newApiKey = '';
   }
 
   let newAmapKey = settings.amapKey || '';
-  if (amapInput.value.trim() && amapInput.value !== MASK_PLACEHOLDER) {
+  if (amapInput && amapInput.value.trim() && amapInput.value !== MASK_PLACEHOLDER) {
     newAmapKey = amapInput.value.trim();
-  } else if (!amapInput.value.trim() && amapInput.dataset.masked !== 'true') {
+  } else if (amapInput && !amapInput.value.trim() && amapInput.dataset.masked !== 'true') {
     newAmapKey = '';
   }
 
+  let newGhToken = settings.githubToken || '';
+  if (ghInput && ghInput.value.trim() && ghInput.value !== MASK_PLACEHOLDER) {
+    newGhToken = ghInput.value.trim();
+  } else if (ghInput && !ghInput.value.trim() && ghInput.dataset.masked !== 'true') {
+    newGhToken = '';
+  }
+
+  const newGistId = gistInput ? gistInput.value.trim() : (settings.gistId || '');
   const baseUrl = document.getElementById('settingBaseUrl').value.trim();
   const model = document.getElementById('settingModel').value.trim();
   const baseMileage = document.getElementById('settingBaseMileage').value.trim();
+
+  const isTokenNewlySet = newGhToken && (newGhToken !== settings.githubToken || !newGistId);
 
   const newSettings = {
     apiKey: newApiKey,
     amapKey: newAmapKey,
     baseUrl: baseUrl,
-    model: model
+    model: model,
+    githubToken: newGhToken,
+    gistId: newGistId
   };
 
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
@@ -1063,6 +1083,16 @@ function closeSettingsModal() {
   dismissSettingsModal();
   onInputChanged();
   initLocation();
+
+  // 如果新配置了 GitHub Token，保存后立即后台自动校验并推送一次！
+  if (newGhToken) {
+    showToast('设置已保存，正在同步云端...', true);
+    setTimeout(() => {
+      syncToCloud(false, newGhToken);
+    }, 400);
+  } else {
+    showToast('设置已保存生效！', true);
+  }
 }
 
 // 13. 在线版本检查与按需手动更新（置于系统设置底部，按需触发，日常不干扰使用）
@@ -1143,11 +1173,15 @@ function showToast(msg, isSuccess = true) {
   }, 2200);
 }
 
+
 // --- GitHub Gist 云端自动同步核心逻辑 ---
-async function syncToCloud(isSilent = false) {
+async function syncToCloud(isSilent = false, explicitToken = null) {
   const settings = getSettings();
-  const token = (settings.githubToken || '').trim();
-  if (!token) return;
+  const token = (explicitToken || settings.githubToken || '').trim();
+  if (!token) {
+    if (!isSilent) alert('【未配置 Token】请先在设置中填写您的 GitHub 访问令牌 (ghp_...)！');
+    return;
+  }
 
   const records = getRecords();
   const baseMileage = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
@@ -1159,16 +1193,41 @@ async function syncToCloud(isSilent = false) {
     records: records
   };
   const fileContent = JSON.stringify(payload, null, 2);
+  const authHeader = `token ${token.replace(/^(Bearer|token)\s+/i, '')}`;
 
   try {
     let gistId = (settings.gistId || '').trim();
+    let isCreatedNew = false;
     
-    // 若已有 Gist ID，执行 PATCH 更新
+    // 如果本地没有 gistId，先尝试检查 GitHub 上是否已存在 Fuel Up 的备份 Gist，避免重复创建
+    if (!gistId) {
+      try {
+        const listRes = await fetch('https://api.github.com/gists?per_page=30', {
+          headers: {
+            'Authorization': authHeader,
+            'Accept': 'application/vnd.github+json'
+          }
+        });
+        if (listRes.ok) {
+          const list = await listRes.json();
+          const found = list.find(g => g.files && g.files['fuel_up_records.json']);
+          if (found) {
+            gistId = found.id;
+            settings.gistId = gistId;
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+          }
+        }
+      } catch (e) {
+        console.warn('检查已有 Gist 失败，将直接创建:', e);
+      }
+    }
+
     if (gistId) {
+      // 存在 Gist ID，执行 PATCH 更新
       const patchRes = await fetch(`https://api.github.com/gists/${gistId}`, {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': authHeader,
           'Accept': 'application/vnd.github+json',
           'Content-Type': 'application/json'
         },
@@ -1179,13 +1238,16 @@ async function syncToCloud(isSilent = false) {
           }
         })
       });
-      if (!patchRes.ok) throw new Error(`更新失败: ${patchRes.status}`);
+      if (!patchRes.ok) {
+        const errJson = await patchRes.json().catch(() => ({}));
+        throw new Error(errJson.message || `HTTP ${patchRes.status}`);
+      }
     } else {
-      // 尚未生成 Gist ID，执行 POST 创建私有 Gist
+      // 执行 POST 创建私有 Gist
       const createRes = await fetch('https://api.github.com/gists', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': authHeader,
           'Accept': 'application/vnd.github+json',
           'Content-Type': 'application/json'
         },
@@ -1197,14 +1259,22 @@ async function syncToCloud(isSilent = false) {
           }
         })
       });
-      if (!createRes.ok) throw new Error(`创建失败: ${createRes.status}`);
+      if (!createRes.ok) {
+        const errJson = await createRes.json().catch(() => ({}));
+        throw new Error(errJson.message || `HTTP ${createRes.status}`);
+      }
       const data = await createRes.json();
       gistId = data.id;
       settings.gistId = gistId;
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-      const gistInput = document.getElementById('settingGithubGistId');
-      if (gistInput) gistInput.value = gistId;
+      isCreatedNew = true;
     }
+
+    // 页面元素同步更新
+    const gistInput = document.getElementById('settingGithubGistId');
+    if (gistInput) gistInput.value = gistId;
+    const badgeGh = document.getElementById('badgeGithubStatus');
+    if (badgeGh) badgeGh.style.display = 'inline-block';
 
     const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     localStorage.setItem(SETTINGS_KEY + '_last_sync', nowStr);
@@ -1212,30 +1282,73 @@ async function syncToCloud(isSilent = false) {
     if (timeEl) timeEl.innerText = '刚刚同步 (' + nowStr + ')';
 
     if (!isSilent) {
-      showToast('成功同步到 GitHub 云端！', true);
+      alert(`✓ 同步成功！\n已在您的 GitHub 成功${isCreatedNew ? '创建私有备份' : '更新云端备份'}！\n本次共备份 ${records.length} 条加油数据。\n\n此时在 GitHub Gist 页面刷新即可看到 fuel_up_records.json！`);
     } else {
+      showToast('云端备份已同步！', true);
       console.log('Fuel Up: 已自动静默同步至 GitHub 云端');
     }
   } catch (err) {
     console.error('云端同步失败:', err);
     if (!isSilent) {
-      alert('云端同步失败，请检查 GitHub Token 权限是否包含 gist：' + err.message);
+      if (err.message.includes('401') || err.message.toLowerCase().includes('bad credentials')) {
+        alert('【GitHub Token 验证失败 (401)】\n您填写的 Token 无效或已过期，请重新核对复制是否完整（需包含 ghp_ 前缀）。');
+      } else if (err.message.includes('404') || err.message.toLowerCase().includes('not found')) {
+        alert('【找不到对应 Gist (404)】\n请清空 Gist ID 输入框，重新点击“立即同步上传”，软件会自动为您新建。');
+      } else {
+        alert('【云端同步失败】\n' + err.message + '\n\n请检查网络连通性，或确认 Token 是否勾选了 gist 权限。');
+      }
     }
   }
 }
 
 async function manualSyncToCloud() {
   const btn = document.getElementById('btnManualSync');
+  const ghInput = document.getElementById('settingGithubToken');
+  const gistInput = document.getElementById('settingGithubGistId');
+  
+  // 关键：优先从输入框取当前输入的 token！哪怕用户还没点保存并生效！
+  let token = '';
+  if (ghInput && ghInput.value.trim() && ghInput.value !== MASK_PLACEHOLDER) {
+    token = ghInput.value.trim();
+  } else {
+    const settings = getSettings();
+    token = (settings.githubToken || '').trim();
+  }
+
+  if (!token) {
+    alert('【未检测到 Token】\n请先在上方输入框中粘贴您的 GitHub 个人访问令牌 (ghp_...)！');
+    if (ghInput) ghInput.focus();
+    return;
+  }
+
+  // 顺便把 token 先存下来，避免用户还要再点一次保存
+  const settings = getSettings();
+  settings.githubToken = token;
+  if (gistInput && gistInput.value.trim()) {
+    settings.gistId = gistInput.value.trim();
+  }
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+
   if (btn) { btn.disabled = true; btn.innerText = '正在上传...'; }
-  await syncToCloud(false);
+  await syncToCloud(false, token);
   if (btn) { btn.disabled = false; btn.innerText = '☁️ 立即同步上传'; }
 }
 
 async function manualRestoreFromCloud() {
-  const settings = getSettings();
-  const token = (settings.githubToken || '').trim();
+  const ghInput = document.getElementById('settingGithubToken');
+  const gistInput = document.getElementById('settingGithubGistId');
+
+  let token = '';
+  if (ghInput && ghInput.value.trim() && ghInput.value !== MASK_PLACEHOLDER) {
+    token = ghInput.value.trim();
+  } else {
+    const settings = getSettings();
+    token = (settings.githubToken || '').trim();
+  }
+
   if (!token) {
-    alert('请先填写 GitHub Token 再拉取云端数据！');
+    alert('【未检测到 Token】\n请先在上方输入框中粘贴您的 GitHub 访问令牌 (ghp_...)！');
+    if (ghInput) ghInput.focus();
     return;
   }
 
@@ -1244,45 +1357,47 @@ async function manualRestoreFromCloud() {
   const btn = document.getElementById('btnManualRestore');
   if (btn) { btn.disabled = true; btn.innerText = '正在拉取...'; }
 
+  const authHeader = `token ${token.replace(/^(Bearer|token)\s+/i, '')}`;
+
   try {
-    let gistId = (settings.gistId || '').trim();
+    const settings = getSettings();
+    let gistId = (gistInput && gistInput.value.trim()) ? gistInput.value.trim() : (settings.gistId || '').trim();
     let targetGist = null;
 
-    // 若已知 Gist ID 直接获取
     if (gistId) {
       const res = await fetch(`https://api.github.com/gists/${gistId}`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': authHeader,
           'Accept': 'application/vnd.github+json'
         }
       });
       if (res.ok) targetGist = await res.json();
     }
 
-    // 若未填 Gist ID，自动检索名下包含 fuel_up_records.json 的 Gist
     if (!targetGist) {
       const listRes = await fetch('https://api.github.com/gists?per_page=30', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': authHeader,
           'Accept': 'application/vnd.github+json'
         }
       });
-      if (!listRes.ok) throw new Error(`查询云端失败: ${listRes.status}`);
+      if (!listRes.ok) {
+        const errJson = await listRes.json().catch(() => ({}));
+        throw new Error(errJson.message || `HTTP ${listRes.status}`);
+      }
       const list = await listRes.json();
       targetGist = list.find(g => g.files && g.files['fuel_up_records.json']);
       if (targetGist) {
         settings.gistId = targetGist.id;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-        const gistInput = document.getElementById('settingGithubGistId');
         if (gistInput) gistInput.value = targetGist.id;
       }
     }
 
     if (!targetGist || !targetGist.files || !targetGist.files['fuel_up_records.json']) {
-      throw new Error('未在您的 GitHub 中找到 Fuel Up 备份文件，请先点击“立即同步上传”创建备份。');
+      throw new Error('未在您的 GitHub 找到 Fuel Up 备份文件。请先录入一条加油数据或点击“立即同步上传”创建云端备份。');
     }
 
-    // 获取文件内容
     const fileInfo = targetGist.files['fuel_up_records.json'];
     let rawContent = fileInfo.content;
     if (!rawContent && fileInfo.raw_url) {
@@ -1299,14 +1414,15 @@ async function manualRestoreFromCloud() {
       renderStats();
       renderHistory();
       onInputChanged();
-      showToast(`已恢复 ${data.records.length} 条加油记录！`, true);
-      alert(`✓ 恢复成功！已从 GitHub 云端载入 ${data.records.length} 条加油记录。`);
+      showToast(`已成功恢复 ${data.records.length} 条加油记录！`, true);
+      alert(`✓ 恢复成功！\n已从 GitHub 云端载入 ${data.records.length} 条加油记录。`);
+      dismissSettingsModal();
     } else {
       throw new Error('云端备份文件数据格式不正确');
     }
   } catch (err) {
     console.error('拉取恢复失败:', err);
-    alert('从云端恢复失败：' + err.message);
+    alert('从云端恢复失败：\n' + err.message);
   } finally {
     if (btn) { btn.disabled = false; btn.innerText = '📥 从云端拉取恢复'; }
   }

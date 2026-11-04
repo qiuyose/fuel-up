@@ -1,8 +1,8 @@
-﻿const CACHE_NAME = 'fuel-up-v17';
+﻿const CACHE_NAME = 'fuel-up-v18';
 const ASSETS = [
   './',
   './index.html',
-  './style.css?v=20261104_cloudsync',
+  './style.css?v=20261104_v18',
   './app.js',
   './manifest.json?v=20261021',
   './icon.svg?v=20261021',
