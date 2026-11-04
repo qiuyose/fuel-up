@@ -995,3 +995,33 @@ select.ios-select:focus {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
 }
+
+/* iOS 密码防劫持样式：使用 -webkit-text-security 代替 type=password，彻底杜绝系统钥匙串弹窗 */
+.security-disc {
+  -webkit-text-security: disc !important;
+}
+
+.input-action-group {
+  position: absolute;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.btn-action-icon {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.btn-action-icon:active {
+  background: rgba(120, 120, 128, 0.15);
+}

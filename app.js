@@ -928,10 +928,18 @@ function openSettingsModal() {
     const ghInput = document.getElementById('settingGithubToken');
     const badgeGh = document.getElementById('badgeGithubStatus');
     if (settings.githubToken && settings.githubToken.trim()) {
-      if (ghInput) { ghInput.value = MASK_PLACEHOLDER; ghInput.dataset.masked = 'true'; }
+      if (ghInput) {
+        ghInput.value = MASK_PLACEHOLDER;
+        ghInput.dataset.masked = 'true';
+        ghInput.classList.add('security-disc');
+      }
       if (badgeGh) badgeGh.style.display = 'inline-block';
     } else {
-      if (ghInput) { ghInput.value = ''; ghInput.dataset.masked = 'false'; }
+      if (ghInput) {
+        ghInput.value = '';
+        ghInput.dataset.masked = 'false';
+        ghInput.classList.remove('security-disc');
+      }
       if (badgeGh) badgeGh.style.display = 'none';
     }
     const gistInput = document.getElementById('settingGithubGistId');
@@ -968,6 +976,63 @@ function openSettingsModal() {
 }
 
 // 聚焦输入框时，如果是掩码，则自动清空供用户输入新Key
+
+// 一键清空指定输入框，并同时清除本地误存的错误密钥
+function clearTokenField(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  input.value = '';
+  input.dataset.masked = 'false';
+  input.classList.remove('security-disc');
+
+  const settings = getSettings();
+  if (inputId === 'settingGithubToken') {
+    settings.githubToken = '';
+    const badgeGh = document.getElementById('badgeGithubStatus');
+    if (badgeGh) badgeGh.style.display = 'none';
+  } else if (inputId === 'settingApiKey') {
+    settings.apiKey = '';
+    const badgeApi = document.getElementById('badgeApiStatus');
+    if (badgeApi) badgeApi.style.display = 'none';
+  } else if (inputId === 'settingAmapKey') {
+    settings.amapKey = '';
+    const badgeAmap = document.getElementById('badgeAmapStatus');
+    if (badgeAmap) badgeAmap.style.display = 'none';
+  }
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+
+  input.focus();
+  showToast('已彻底清空，可直接粘贴正确内容', false);
+}
+
+// 一键读取剪贴板并粘贴，彻底避开 iOS 长按与系统密码钥匙串弹窗
+async function pasteFromClipboard(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        input.value = text.trim();
+        input.dataset.masked = 'false';
+        input.classList.remove('security-disc');
+        showToast('已成功粘贴剪贴板 Token！', true);
+        return;
+      }
+    }
+  } catch (err) {
+    console.log('剪贴板权限限制，降级为清空聚焦:', err);
+  }
+
+  // 降级引导：清空后聚焦供用户长按粘贴
+  input.value = '';
+  input.dataset.masked = 'false';
+  input.classList.remove('security-disc');
+  input.focus();
+  showToast('已清空，请在框内长按选择“粘贴”', false);
+}
+
 function handleKeyFocus(input) {
   if (input.dataset.masked === 'true') {
     input.value = '';
@@ -993,25 +1058,26 @@ function handleKeyBlur(input) {
 function togglePasswordVisibility(inputId) {
   const input = document.getElementById(inputId);
   if (!input) return;
-  const isPwd = input.type === 'password';
-  input.type = isPwd ? 'text' : 'password';
+  const isSecured = input.classList.contains('security-disc') || input.type === 'password';
 
-  // 如果当前是掩码，并且用户切换到明文查看，展示真实 Key
   const settings = getSettings();
   let realKey = '';
   if (inputId === 'settingAmapKey') realKey = settings.amapKey;
   else if (inputId === 'settingApiKey') realKey = settings.apiKey;
   else if (inputId === 'settingGithubToken') realKey = settings.githubToken;
 
-  if (!isPwd) {
-    // 切换回密文
-    if (input.dataset.masked === 'true') {
-      input.value = MASK_PLACEHOLDER;
-    }
-  } else {
-    // 切换为明文查看
+  if (isSecured) {
+    // 切换为明文可见状态
+    input.classList.remove('security-disc');
+    input.type = 'text';
     if (input.dataset.masked === 'true' && realKey) {
       input.value = realKey;
+    }
+  } else {
+    // 切换回圆点密文状态
+    input.classList.add('security-disc');
+    if (input.dataset.masked === 'true') {
+      input.value = MASK_PLACEHOLDER;
     }
   }
 }
