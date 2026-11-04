@@ -640,6 +640,8 @@ function saveRecord() {
   renderStats();
   renderHistory();
   switchTab('history');
+  syncToCloud(true); // 自动云端备份
+  showToast('记账成功，已存入云端！');
 }
 
 function resetForm() {
@@ -758,6 +760,7 @@ function deleteRecord(id) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   renderStats();
   renderHistory();
+  syncToCloud(true); // 删除后同步
 }
 
 // 11. 照片全屏预览 Lightbox (彻底解决 window.open 导致的无法关闭/必须退出应用的严重BUG)
@@ -921,7 +924,23 @@ function openSettingsModal() {
     if (badgeAmap) badgeAmap.style.display = 'none';
   }
 
-  document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
+  // GitHub Token 脱敏展示
+    const ghInput = document.getElementById('settingGithubToken');
+    const badgeGh = document.getElementById('badgeGithubStatus');
+    if (settings.githubToken && settings.githubToken.trim()) {
+      if (ghInput) { ghInput.value = MASK_PLACEHOLDER; ghInput.dataset.masked = 'true'; }
+      if (badgeGh) badgeGh.style.display = 'inline-block';
+    } else {
+      if (ghInput) { ghInput.value = ''; ghInput.dataset.masked = 'false'; }
+      if (badgeGh) badgeGh.style.display = 'none';
+    }
+    const gistInput = document.getElementById('settingGithubGistId');
+    if (gistInput) gistInput.value = settings.gistId || '';
+    const lastSync = localStorage.getItem(SETTINGS_KEY + '_last_sync');
+    const syncEl = document.getElementById('cloudLastSyncTime');
+    if (syncEl && lastSync) syncEl.innerText = '最后同步: ' + lastSync;
+
+    document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
   const currentModel = settings.model || 'Qwen/Qwen3-VL';
   const modelInput = document.getElementById('settingModel');
   if (modelInput) modelInput.value = currentModel;
@@ -1108,5 +1127,187 @@ async function checkAndUpdateApp() {
       btn.innerText = '重试更新';
       btn.style.opacity = '1';
     }
+  }
+}
+
+// --- 顶部轻提示 Toast ---
+let toastTimer = null;
+function showToast(msg, isSuccess = true) {
+  const toast = document.getElementById('appToast');
+  if (!toast) return;
+  toast.innerText = (isSuccess ? '✓ ' : 'ℹ️ ') + msg;
+  toast.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    toast.classList.remove('show');
+  }, 2200);
+}
+
+// --- GitHub Gist 云端自动同步核心逻辑 ---
+async function syncToCloud(isSilent = false) {
+  const settings = getSettings();
+  const token = (settings.githubToken || '').trim();
+  if (!token) return;
+
+  const records = getRecords();
+  const baseMileage = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
+  const payload = {
+    appName: 'Fuel Up',
+    version: '1.5.0',
+    updatedAt: new Date().toISOString(),
+    baseMileage: baseMileage,
+    records: records
+  };
+  const fileContent = JSON.stringify(payload, null, 2);
+
+  try {
+    let gistId = (settings.gistId || '').trim();
+    
+    // 若已有 Gist ID，执行 PATCH 更新
+    if (gistId) {
+      const patchRes = await fetch(`https://api.github.com/gists/${gistId}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          description: 'Fuel Up 加油记录云端自动备份',
+          files: {
+            'fuel_up_records.json': { content: fileContent }
+          }
+        })
+      });
+      if (!patchRes.ok) throw new Error(`更新失败: ${patchRes.status}`);
+    } else {
+      // 尚未生成 Gist ID，执行 POST 创建私有 Gist
+      const createRes = await fetch('https://api.github.com/gists', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          description: 'Fuel Up 加油记录云端自动备份',
+          public: false,
+          files: {
+            'fuel_up_records.json': { content: fileContent }
+          }
+        })
+      });
+      if (!createRes.ok) throw new Error(`创建失败: ${createRes.status}`);
+      const data = await createRes.json();
+      gistId = data.id;
+      settings.gistId = gistId;
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      const gistInput = document.getElementById('settingGithubGistId');
+      if (gistInput) gistInput.value = gistId;
+    }
+
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    localStorage.setItem(SETTINGS_KEY + '_last_sync', nowStr);
+    const timeEl = document.getElementById('cloudLastSyncTime');
+    if (timeEl) timeEl.innerText = '刚刚同步 (' + nowStr + ')';
+
+    if (!isSilent) {
+      showToast('成功同步到 GitHub 云端！', true);
+    } else {
+      console.log('Fuel Up: 已自动静默同步至 GitHub 云端');
+    }
+  } catch (err) {
+    console.error('云端同步失败:', err);
+    if (!isSilent) {
+      alert('云端同步失败，请检查 GitHub Token 权限是否包含 gist：' + err.message);
+    }
+  }
+}
+
+async function manualSyncToCloud() {
+  const btn = document.getElementById('btnManualSync');
+  if (btn) { btn.disabled = true; btn.innerText = '正在上传...'; }
+  await syncToCloud(false);
+  if (btn) { btn.disabled = false; btn.innerText = '☁️ 立即同步上传'; }
+}
+
+async function manualRestoreFromCloud() {
+  const settings = getSettings();
+  const token = (settings.githubToken || '').trim();
+  if (!token) {
+    alert('请先填写 GitHub Token 再拉取云端数据！');
+    return;
+  }
+
+  if (!confirm('从云端拉取将用 GitHub 上的最新数据合并覆盖本地记录，确定继续吗？')) return;
+
+  const btn = document.getElementById('btnManualRestore');
+  if (btn) { btn.disabled = true; btn.innerText = '正在拉取...'; }
+
+  try {
+    let gistId = (settings.gistId || '').trim();
+    let targetGist = null;
+
+    // 若已知 Gist ID 直接获取
+    if (gistId) {
+      const res = await fetch(`https://api.github.com/gists/${gistId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json'
+        }
+      });
+      if (res.ok) targetGist = await res.json();
+    }
+
+    // 若未填 Gist ID，自动检索名下包含 fuel_up_records.json 的 Gist
+    if (!targetGist) {
+      const listRes = await fetch('https://api.github.com/gists?per_page=30', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json'
+        }
+      });
+      if (!listRes.ok) throw new Error(`查询云端失败: ${listRes.status}`);
+      const list = await listRes.json();
+      targetGist = list.find(g => g.files && g.files['fuel_up_records.json']);
+      if (targetGist) {
+        settings.gistId = targetGist.id;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        const gistInput = document.getElementById('settingGithubGistId');
+        if (gistInput) gistInput.value = targetGist.id;
+      }
+    }
+
+    if (!targetGist || !targetGist.files || !targetGist.files['fuel_up_records.json']) {
+      throw new Error('未在您的 GitHub 中找到 Fuel Up 备份文件，请先点击“立即同步上传”创建备份。');
+    }
+
+    // 获取文件内容
+    const fileInfo = targetGist.files['fuel_up_records.json'];
+    let rawContent = fileInfo.content;
+    if (!rawContent && fileInfo.raw_url) {
+      const rawRes = await fetch(fileInfo.raw_url);
+      rawContent = await rawRes.text();
+    }
+    const data = JSON.parse(rawContent);
+
+    if (Array.isArray(data.records)) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.records));
+      if (data.baseMileage) {
+        localStorage.setItem(SETTINGS_KEY + '_base_mileage', data.baseMileage);
+      }
+      renderStats();
+      renderHistory();
+      onInputChanged();
+      showToast(`已恢复 ${data.records.length} 条加油记录！`, true);
+      alert(`✓ 恢复成功！已从 GitHub 云端载入 ${data.records.length} 条加油记录。`);
+    } else {
+      throw new Error('云端备份文件数据格式不正确');
+    }
+  } catch (err) {
+    console.error('拉取恢复失败:', err);
+    alert('从云端恢复失败：' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerText = '📥 从云端拉取恢复'; }
   }
 }
