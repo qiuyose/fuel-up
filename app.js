@@ -897,82 +897,103 @@ function loadSettings() {
 }
 
 function openSettingsModal() {
-  const settings = getSettings();
-  const apiInput = document.getElementById('settingApiKey');
-  const amapInput = document.getElementById('settingAmapKey');
-  const badgeApi = document.getElementById('badgeApiStatus');
-  const badgeAmap = document.getElementById('badgeAmapStatus');
+  try {
+    const settings = getSettings();
+    const apiInput = document.getElementById('settingApiKey');
+    const amapInput = document.getElementById('settingAmapKey');
+    const badgeApi = document.getElementById('badgeApiStatus');
+    const badgeAmap = document.getElementById('badgeAmapStatus');
 
-  // AI 识图 Key 脱敏展示
-  if (settings.apiKey && settings.apiKey.trim()) {
-    apiInput.value = MASK_PLACEHOLDER;
-    apiInput.dataset.masked = 'true';
-    if (badgeApi) badgeApi.style.display = 'inline-block';
-  } else {
-    apiInput.value = '';
-    apiInput.dataset.masked = 'false';
-    if (badgeApi) badgeApi.style.display = 'none';
-  }
+    // AI 识图 Key 安全脱敏展示
+    if (apiInput) {
+      if (settings.apiKey && settings.apiKey.trim()) {
+        apiInput.value = MASK_PLACEHOLDER;
+        apiInput.dataset.masked = 'true';
+        apiInput.classList.add('security-disc');
+        if (badgeApi) badgeApi.style.display = 'inline-block';
+      } else {
+        apiInput.value = '';
+        apiInput.dataset.masked = 'false';
+        apiInput.classList.remove('security-disc');
+        if (badgeApi) badgeApi.style.display = 'none';
+      }
+    }
 
-  // 高德 Key 脱敏展示
-  if (settings.amapKey && settings.amapKey.trim()) {
-    amapInput.value = MASK_PLACEHOLDER;
-    amapInput.dataset.masked = 'true';
-    if (badgeAmap) badgeAmap.style.display = 'inline-block';
-  } else {
-    amapInput.value = '';
-    amapInput.dataset.masked = 'false';
-    if (badgeAmap) badgeAmap.style.display = 'none';
-  }
+    // 高德 Key 安全脱敏展示
+    if (amapInput) {
+      if (settings.amapKey && settings.amapKey.trim()) {
+        amapInput.value = MASK_PLACEHOLDER;
+        amapInput.dataset.masked = 'true';
+        amapInput.classList.add('security-disc');
+        if (badgeAmap) badgeAmap.style.display = 'inline-block';
+      } else {
+        amapInput.value = '';
+        amapInput.dataset.masked = 'false';
+        amapInput.classList.remove('security-disc');
+        if (badgeAmap) badgeAmap.style.display = 'none';
+      }
+    }
 
-  // GitHub Token 脱敏展示
+    // GitHub Token 安全脱敏展示
     const ghInput = document.getElementById('settingGithubToken');
     const badgeGh = document.getElementById('badgeGithubStatus');
-    if (settings.githubToken && settings.githubToken.trim()) {
-      if (ghInput) {
+    if (ghInput) {
+      if (settings.githubToken && settings.githubToken.trim()) {
         ghInput.value = MASK_PLACEHOLDER;
         ghInput.dataset.masked = 'true';
         ghInput.classList.add('security-disc');
-      }
-      if (badgeGh) badgeGh.style.display = 'inline-block';
-    } else {
-      if (ghInput) {
+        if (badgeGh) badgeGh.style.display = 'inline-block';
+      } else {
         ghInput.value = '';
         ghInput.dataset.masked = 'false';
         ghInput.classList.remove('security-disc');
+        if (badgeGh) badgeGh.style.display = 'none';
       }
-      if (badgeGh) badgeGh.style.display = 'none';
     }
     
     const lastSync = localStorage.getItem(SETTINGS_KEY + '_last_sync');
     const syncEl = document.getElementById('cloudLastSyncTime');
     if (syncEl && lastSync) syncEl.innerText = '最后同步: ' + lastSync;
 
-    document.getElementById('settingBaseUrl').value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
-  const currentModel = settings.model || 'Qwen/Qwen3-VL';
-  const modelInput = document.getElementById('settingModel');
-  if (modelInput) modelInput.value = currentModel;
+    const baseEl = document.getElementById('settingBaseUrl');
+    if (baseEl) baseEl.value = settings.baseUrl || 'https://api.siliconflow.cn/v1';
 
-  // 根据当前模型名称自动判断供应商选项卡
-  const lowerModel = currentModel.toLowerCase();
-  if (lowerModel.includes('glm') || lowerModel.includes('thudm') || lowerModel.includes('zhipu')) {
-    switchVendor('glm');
-  } else if (lowerModel.includes('qwen')) {
-    switchVendor('qwen');
-  } else {
-    switchVendor('all');
+    const currentModel = settings.model || 'Qwen/Qwen3-VL';
+    const modelInput = document.getElementById('settingModel');
+    if (modelInput) modelInput.value = currentModel;
+
+    const lowerModel = currentModel.toLowerCase();
+    if (typeof switchVendor === 'function') {
+      if (lowerModel.includes('glm') || lowerModel.includes('thudm') || lowerModel.includes('zhipu')) {
+        switchVendor('glm');
+      } else if (lowerModel.includes('qwen')) {
+        switchVendor('qwen');
+      } else {
+        switchVendor('all');
+      }
+    }
+
+    // 尝试拉取在线模型列表
+    if (settings.apiKey && typeof fetchOnlineModels === 'function') {
+      fetchOnlineModels(false);
+    } else if (typeof renderVendorModels === 'function') {
+      renderVendorModels();
+    }
+
+    const baseMileageEl = document.getElementById('settingBaseMileage');
+    if (baseMileageEl) {
+      baseMileageEl.value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
+    }
+
+    const modal = document.getElementById('settingsModal');
+    if (modal) {
+      modal.classList.add('show');
+      document.body.style.overflow = 'hidden';
+    }
+  } catch (err) {
+    console.error('打开设置弹窗异常:', err);
+    alert('打开设置失败: ' + err.message);
   }
-
-  // 尝试自动静默拉取一次
-  if (settings.apiKey) {
-    fetchOnlineModels(false);
-  } else {
-    renderVendorModels();
-  }
-
-  document.getElementById('settingBaseMileage').value = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
-  document.getElementById('settingsModal').classList.add('show');
-  document.body.style.overflow = 'hidden';
 }
 
 // 聚焦输入框时，如果是掩码，则自动清空供用户输入新Key

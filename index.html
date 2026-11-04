@@ -17,7 +17,7 @@
   <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 
-  <link rel="stylesheet" href="style.css?v=20261104_v20">
+  <link rel="stylesheet" href="style.css?v=20261104_modal_fix">
 </head>
 <body style="background-color: #F2F2F7;">
 
@@ -195,103 +195,146 @@
   </div>
 
   <!-- 设置与备份弹窗 -->
-  <div class="modal-overlay" id="settingsModal" onclick="handleModalOverlayClick(event)">
-    <div class="modal-content" onclick="event.stopPropagation()">
-      <!-- 弹窗标题与右上角 X 关闭按钮 (吸顶固定，永不被遮挡) -->
-      <div class="modal-header">
-        <div class="modal-title">系统配置与数据管理</div>
-        <button type="button" class="modal-close-btn" onclick="dismissSettingsModal()" title="直接关闭">✕</button>
-      </div>
+    <div class="modal-overlay" id="settingsModal" onclick="handleModalOverlayClick(event)">
+      <div class="modal-content" onclick="event.stopPropagation()">
+        <!-- 弹窗标题与右上角 X 关闭按钮 (吸顶固定，永不被遮挡) -->
+        <div class="modal-header">
+          <div class="modal-title">系统配置与数据管理</div>
+          <button type="button" class="modal-close-btn" onclick="dismissSettingsModal()" title="直接关闭">✕</button>
+        </div>
 
-      <!-- 弹窗内部独立滚动主体 (支持顺畅向下滑动) -->
-      <div class="modal-body">
-        <!-- 通用视觉大模型配置模块 -->
-        <div style="background:rgba(120, 120, 128, 0.06); border-radius:14px; padding:12px; margin-bottom:12px;">
-          <div class="form-group" style="margin-bottom:8px;">
-            <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API 服务地址 (Base URL)</label>
-            <input type="text" id="settingBaseUrl" placeholder="例如：https://api.siliconflow.cn/v1" style="height:38px;font-size:13px;">
+        <!-- 弹窗内部独立滚动主体 (支持顺畅向下滑动) -->
+        <div class="modal-body">
+          <!-- 1. 通用视觉大模型配置模块 -->
+          <div style="background:rgba(120, 120, 128, 0.06); border-radius:14px; padding:12px; margin-bottom:12px;">
+            <div class="form-group" style="margin-bottom:8px;">
+              <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API 服务地址 (Base URL)</label>
+              <input type="text" id="settingBaseUrl" placeholder="例如：https://api.siliconflow.cn/v1" style="height:38px;font-size:13px;">
+            </div>
+
+            <div class="form-group" style="margin-bottom:8px;">
+              <div class="label-row">
+                <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API Key (密钥)</label>
+                <span id="badgeApiStatus" class="badge-status-configured" style="display:none;">已配置</span>
+              </div>
+              <div class="input-with-eye">
+                <input type="text" id="settingApiKey" class="security-disc" placeholder="sk-..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore="true" data-lpignore="true" onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:38px;font-size:13px;">
+                <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingApiKey')" title="显示/隐藏明文">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="label-row">
+                <label style="font-size:12px;color:var(--text-muted);font-weight:600;">视觉模型选择</label>
+                <span id="modelCountBadge" style="font-size:11px;color:var(--primary);font-weight:600;"></span>
+              </div>
+              
+              <!-- 核心供应商快速分类（千问/智谱/全部） -->
+              <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <button type="button" class="vendor-chip active" id="btnVendorQwen" onclick="switchVendor('qwen')">千问 (Qwen)</button>
+                <button type="button" class="vendor-chip" id="btnVendorGlm" onclick="switchVendor('glm')">智谱 (GLM)</button>
+                <button type="button" class="vendor-chip" id="btnVendorAll" onclick="switchVendor('all')">全部视觉</button>
+              </div>
+
+              <div class="label-row" style="margin-top:4px;">
+                <label style="font-size:11px;color:var(--text-muted)">在线模型列表</label>
+                <button type="button" onclick="fetchOnlineModels(true)" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;">
+                  🔄 实时拉取上游模型
+                </button>
+              </div>
+              <select id="selectDynamicModel" class="ios-select" style="height:38px;font-size:13px;" onchange="onDynamicModelChanged(this.value)">
+                <option value="">点击上方“实时拉取”获取列表</option>
+              </select>
+
+              <input type="text" id="settingModel" placeholder="当前生效的模型ID" style="margin-top:6px;height:38px;font-size:13px;">
+              <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
+                填写服务地址后点击“实时拉取”，直接在下拉框点选即可生效。
+              </small>
+            </div>
           </div>
 
-          <div class="form-group" style="margin-bottom:8px;">
-            <div class="label-row">
-              <label style="font-size:12px;color:var(--text-muted);font-weight:600;">API Key (密钥)</label>
-              <span id="badgeApiStatus" class="badge-status-configured" style="display:none;">已配置</span>
+          <!-- 2. 高德地图定位配置模块 -->
+          <div style="background:rgba(120, 120, 128, 0.06); border-radius:14px; padding:12px; margin-bottom:12px;">
+            <div class="form-group" style="margin-bottom:0;">
+              <div class="label-row">
+                <label style="font-size:12px;color:var(--text-muted);font-weight:600;">高德 Web服务 API Key</label>
+                <span id="badgeAmapStatus" class="badge-status-configured" style="display:none;">已配置</span>
+              </div>
+              <div class="input-with-eye">
+                <input type="text" id="settingAmapKey" class="security-disc" placeholder="高德开放平台申请的 Web服务 Key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore="true" data-lpignore="true" onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:38px;font-size:13px;">
+                <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingAmapKey')" title="显示/隐藏明文">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+              <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
+                用于自动识别当前所在加油站名称与距离。
+              </small>
             </div>
-            <div class="input-with-eye">
-              <input type="text" id="settingAmapKey" class="security-disc" placeholder="高德开放平台申请的 Web服务 Key" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore="true" data-lpignore="true" onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:38px;font-size:13px;">
-              <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingAmapKey')" title="显示/隐藏明文">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          </div>
+
+          <!-- 3. 基准初始总里程模块 -->
+          <div class="form-group" style="margin-bottom:12px;">
+            <label style="font-size:12px;color:var(--text-muted);font-weight:600;">基准初始总里程 (km)</label>
+            <input type="number" id="settingBaseMileage" placeholder="例如：12500 (第一笔记录前的里程)" style="height:38px;font-size:13px;">
+            <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">用于第一笔记录准确核算续航与油耗。</small>
+          </div>
+
+          <!-- 4. GitHub 云端自动同步模块 (极简无感版) -->
+          <div style="background:rgba(120, 120, 128, 0.06); border-radius:14px; padding:12px; margin-bottom:12px; border:1px solid var(--separator);">
+            <div class="label-row" style="margin-bottom:6px;">
+              <label style="font-size:12px;color:var(--text-muted);font-weight:600;">☁️ GitHub 云端自动同步 (防丢失)</label>
+              <span id="badgeGithubStatus" class="badge-status-configured" style="display:none;">已连接云端</span>
+            </div>
+            
+            <div class="form-group" style="margin-bottom:10px;">
+              <div class="label-row">
+                <label style="font-size:11px;color:var(--text-muted)">GitHub 访问令牌 (Token)</label>
+                <span id="cloudLastSyncTime" style="font-size:11px;color:var(--text-muted);">未同步</span>
+              </div>
+              <div class="input-with-eye">
+                <input type="text" id="settingGithubToken" class="security-disc" placeholder="ghp_... (勾选 gist 权限)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore="true" data-lpignore="true" onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:38px;font-size:13px;">
+                <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingGithubToken')" title="显示/隐藏明文">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+              <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
+                保存后每次记账自动静默同步到 GitHub，换手机或清缓存也绝不丢失。
+              </small>
+            </div>
+
+            <div style="display:flex; gap:8px;">
+              <button type="button" id="btnManualSync" class="cam-btn" style="flex:1; height:36px; font-size:12px;" onclick="manualSyncToCloud()">
+                ☁️ 立即同步上传
+              </button>
+              <button type="button" id="btnManualRestore" class="cam-btn" style="flex:1; height:36px; font-size:12px;" onclick="manualRestoreFromCloud()">
+                📥 从云端拉取恢复
               </button>
             </div>
-            <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
-              用于自动识别当前所在加油站名称与距离。
-            </small>
           </div>
-        </div>
 
-        <!-- 基准初始里程 -->
-        <div class="form-group" style="margin-bottom:12px;">
-          <label style="font-size:12px;color:var(--text-muted);font-weight:600;">基准初始总里程 (km)</label>
-          <input type="number" id="settingBaseMileage" placeholder="例如：12500 (第一笔记录前的里程)" style="height:38px;font-size:13px;">
-          <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">用于第一笔记录准确核算续航与油耗。</small>
-        </div>
+          <!-- 保存并生效按钮 -->
+          <button class="btn-submit" onclick="closeSettingsModal()" style="margin-top:4px;">保存并生效</button>
 
-        
-        <!-- GitHub 云端自动同步与防丢失模块 (极简无感版) -->
-        <div style="background:rgba(120, 120, 128, 0.06); border-radius:14px; padding:12px; margin-bottom:12px; border:1px solid var(--separator);">
-          <div class="label-row" style="margin-bottom:6px;">
-            <label style="font-size:12px;color:var(--text-muted);font-weight:600;">☁️ GitHub 云端自动同步 (防丢失)</label>
-            <span id="badgeGithubStatus" class="badge-status-configured" style="display:none;">已连接云端</span>
-          </div>
-          
-          <div class="form-group" style="margin-bottom:10px;">
-            <div class="label-row">
-              <label style="font-size:11px;color:var(--text-muted)">GitHub 访问令牌 (Token)</label>
-              <span id="cloudLastSyncTime" style="font-size:11px;color:var(--text-muted);">未同步</span>
-            </div>
-            <div class="input-with-eye">
-              <input type="text" id="settingGithubToken" class="security-disc" placeholder="ghp_... (勾选 gist 权限)" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-1p-ignore="true" data-lpignore="true" onfocus="handleKeyFocus(this)" onblur="handleKeyBlur(this)" style="height:38px;font-size:13px;">
-              <button type="button" class="btn-eye" onclick="togglePasswordVisibility('settingGithubToken')" title="显示/隐藏明文">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          <!-- 应用版本与在线更新卡片 -->
+          <div style="margin-top:16px; padding:12px 14px; background:rgba(120, 120, 128, 0.06); border-radius:12px; border:1px solid var(--separator);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="font-size:13px; font-weight:600; color:var(--text-main);">Fuel Up 稳定版</div>
+                <div id="appVersionLabel" style="font-size:11px; color:var(--text-muted); margin-top:2px;">版本 v1.5.0 · 离线秒开</div>
+              </div>
+              <button type="button" id="btnUpdateApp" class="cam-btn" style="height:32px; font-size:12px; padding:0 12px; border-radius:16px;" onclick="checkAndUpdateApp()">
+                检查更新
               </button>
             </div>
-            <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
-              保存后每次记账自动静默同步到 GitHub，换手机或清缓存也绝不丢失。
-            </small>
+            <div id="updateStatusTip" style="font-size:11px; color:var(--text-muted); margin-top:6px; display:none;"></div>
           </div>
-
-          <div style="display:flex; gap:8px;">
-            <button type="button" id="btnManualSync" class="cam-btn" style="flex:1; height:36px; font-size:12px;" onclick="manualSyncToCloud()">
-              ☁️ 立即同步上传
-            </button>
-            <button type="button" id="btnManualRestore" class="cam-btn" style="flex:1; height:36px; font-size:12px;" onclick="manualRestoreFromCloud()">
-              📥 从云端拉取恢复
-            </button>
-          </div>
-        </div>
-
-        <!-- 保存并生效按钮 -->
-        <button class="btn-submit" onclick="closeSettingsModal()" style="margin-top:4px;">保存并生效</button>
-
-        <!-- 应用版本与在线更新（移入设置最底部，按需点击更新） -->
-        <div style="margin-top:16px; padding:12px 14px; background:rgba(120, 120, 128, 0.06); border-radius:12px; border:1px solid var(--separator);">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <div style="font-size:13px; font-weight:600; color:var(--text-main);">Fuel Up 稳定版</div>
-              <div id="appVersionLabel" style="font-size:11px; color:var(--text-muted); margin-top:2px;">版本 v1.5.0 · 离线秒开</div>
-            </div>
-            <button type="button" id="btnUpdateApp" class="cam-btn" style="height:32px; font-size:12px; padding:0 12px; border-radius:16px;" onclick="checkAndUpdateApp()">
-              检查更新
-            </button>
-          </div>
-          <div id="updateStatusTip" style="font-size:11px; color:var(--text-muted); margin-top:6px; display:none;"></div>
         </div>
       </div>
     </div>
-  </div>
 
-  
-  <!-- 原生质感全屏照片查看器 Lightbox (轻触背景或右上角✕直接关闭) -->
+    <!-- 原生质感全屏照片查看器 Lightbox (轻触背景或右上角✕直接关闭) -->
   <div class="photo-viewer-overlay" id="photoViewerModal" onclick="closePhotoViewer()">
     <div class="photo-viewer-header" onclick="event.stopPropagation()">
       <span class="photo-viewer-title" id="photoViewerTitle">照片凭据预览</span>
