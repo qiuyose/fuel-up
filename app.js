@@ -173,6 +173,184 @@ function onDynamicModelChanged(val) {
     input.focus();
   }
 }
+
+// v1.5.2: 仅使用当前服务商实际返回的在线模型，不再内置供应商分组或过期候选模型。
+const APP_VERSION = '1.5.2';
+const MODEL_CACHE_KEY = 'cached_online_models_v1';
+const LEGACY_MODEL_CACHE_KEY = 'cached_vision_models';
+const MODEL_FILTER_KEY = 'show_vision_models_only';
+let showVisionModelsOnly = true;
+
+function normaliseModelBaseUrl(value) {
+  let baseUrl = (value || '').trim().replace(/\/+$/, '');
+  if (baseUrl.endsWith('/chat/completions')) {
+    baseUrl = baseUrl.replace(/\/chat\/completions$/, '');
+  }
+  return baseUrl;
+}
+
+function getCachedOnlineModels() {
+  if (cachedOnlineModels.length) return cachedOnlineModels;
+
+  try {
+    const stored = JSON.parse(localStorage.getItem(MODEL_CACHE_KEY) || localStorage.getItem(LEGACY_MODEL_CACHE_KEY) || '[]');
+    cachedOnlineModels = Array.isArray(stored)
+      ? [...new Set(stored.filter((id) => typeof id === 'string' && id.trim()).map((id) => id.trim()))]
+      : [];
+  } catch (error) {
+    cachedOnlineModels = [];
+  }
+
+  return cachedOnlineModels;
+}
+
+function isLikelyVisionModel(modelId) {
+  const id = modelId.toLowerCase();
+  return /(\bvl\b|[-_/]vl|vision|visual|multimodal|\d+(?:\.\d+)?v\b|4o|gemini|claude|llava|internvl|cogvl|pixtral|gpt-4\.1)/.test(id);
+}
+
+function setVisionModelFilter(enabled) {
+  showVisionModelsOnly = Boolean(enabled);
+  localStorage.setItem(MODEL_FILTER_KEY, String(showVisionModelsOnly));
+  renderOnlineModels();
+}
+
+async function fetchOnlineModels(isManualClick = false) {
+  const settings = getSettings();
+  const apiInput = document.getElementById('settingApiKey');
+  const baseInput = document.getElementById('settingBaseUrl');
+  const refreshButton = document.getElementById('btnRefreshModels');
+  const badge = document.getElementById('modelCountBadge');
+
+  let apiKey = settings.apiKey || '';
+  if (apiInput && apiInput.value && apiInput.value !== MASK_PLACEHOLDER && apiInput.dataset.masked !== 'true') {
+    apiKey = apiInput.value.trim();
+  }
+
+  const baseUrl = normaliseModelBaseUrl(baseInput?.value || settings.baseUrl || '');
+  if (!baseUrl || !apiKey) {
+    renderOnlineModels();
+    if (isManualClick) showToast('请先填写 API 服务地址和 API Key', false);
+    return;
+  }
+
+  if (refreshButton) {
+    refreshButton.disabled = true;
+    refreshButton.innerText = '拉取中...';
+  }
+  if (badge) badge.innerText = '正在拉取...';
+
+  let host = baseUrl;
+  try { host = new URL(baseUrl).host; } catch (error) {}
+
+  try {
+    const res = await fetch(`${baseUrl}/models`, {
+      method: 'GET',
+      headers: { Authorization: `Bearer ${apiKey}` }
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    const data = await res.json();
+    if (!data || !Array.isArray(data.data)) {
+      throw new Error('接口没有返回标准模型列表');
+    }
+
+    cachedOnlineModels = [...new Set(data.data
+      .map((model) => typeof model?.id === 'string' ? model.id.trim() : '')
+      .filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b));
+    localStorage.setItem(MODEL_CACHE_KEY, JSON.stringify(cachedOnlineModels));
+    renderOnlineModels();
+
+    if (isManualClick) showToast(`已从 ${host} 拉取 ${cachedOnlineModels.length} 个模型`, true);
+  } catch (error) {
+    console.warn('拉取上游模型失败:', error);
+    renderOnlineModels();
+    if (isManualClick) showToast(`模型列表拉取失败：${error.message}`, false);
+  } finally {
+    if (refreshButton) {
+      refreshButton.disabled = false;
+      refreshButton.innerText = '实时拉取';
+    }
+  }
+}
+
+function renderOnlineModels() {
+  const select = document.getElementById('selectDynamicModel');
+  const input = document.getElementById('settingModel');
+  const badge = document.getElementById('modelCountBadge');
+  const filterToggle = document.getElementById('visionModelsOnly');
+  if (!select) return;
+
+  if (filterToggle) filterToggle.checked = showVisionModelsOnly;
+
+  const allModels = getCachedOnlineModels();
+  const models = showVisionModelsOnly ? allModels.filter(isLikelyVisionModel) : allModels;
+  const currentModel = input?.value.trim() || getSettings().model || '';
+  select.replaceChildren();
+
+  if (!models.length) {
+    const emptyOption = document.createElement('option');
+    emptyOption.value = '';
+    emptyOption.disabled = true;
+    emptyOption.innerText = allModels.length
+      ? '未找到符合筛选条件的模型'
+      : '填写地址和 API Key 后点击“实时拉取”';
+    select.appendChild(emptyOption);
+  }
+
+  let currentModelInList = false;
+  models.forEach((modelId) => {
+    const option = document.createElement('option');
+    option.value = modelId;
+    option.innerText = modelId;
+    if (modelId === currentModel) currentModelInList = true;
+    select.appendChild(option);
+  });
+
+  if (currentModel && !currentModelInList) {
+    const currentOption = document.createElement('option');
+    currentOption.value = currentModel;
+    currentOption.innerText = `当前使用：${currentModel}`;
+    select.insertBefore(currentOption, select.firstChild);
+  }
+
+  const customOption = document.createElement('option');
+  customOption.value = 'custom';
+  customOption.innerText = '手动输入其他模型...';
+  select.appendChild(customOption);
+
+  if (currentModel) {
+    select.value = currentModel;
+  } else if (models.length) {
+    select.value = models[0];
+    if (input) input.value = models[0];
+  } else {
+    select.value = '';
+  }
+
+  if (badge) {
+    const suffix = showVisionModelsOnly ? ' 个视觉模型' : ' 个在线模型';
+    badge.innerText = allModels.length ? `显示 ${models.length}/${allModels.length}${suffix}` : '未拉取';
+  }
+}
+
+function onDynamicModelChanged(value) {
+  const input = document.getElementById('settingModel');
+  if (!input) return;
+
+  if (value !== 'custom' && value) {
+    input.value = value;
+    return;
+  }
+
+  if (value === 'custom') {
+    input.value = '';
+    input.placeholder = '输入上游返回的模型 ID';
+    input.focus();
+  }
+}
 // Fuel Up - 核心逻辑 (v1.3 密码掩码与直观状态版)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
@@ -486,34 +664,7 @@ async function runOcrRecognition(type, base64Image) {
       });
     };
 
-    let res = await sendVisionRequest(model);
-
-    // 如果提示模型不存在，自动尝试硅基流动候选视觉模型
-    if (!res.ok) {
-      const errClone = res.clone();
-      const firstErrText = await errClone.text();
-      if (firstErrText.includes('model does not exist') || res.status === 404) {
-        const fallbacks = [
-          'Qwen/Qwen2.5-VL-7B-Instruct',
-          'Qwen/Qwen2-VL-7B-Instruct',
-          'Pro/Qwen/Qwen2-VL-7B-Instruct',
-          'THUDM/glm-4v-9b'
-        ].filter(m => m !== model);
-
-        for (let altModel of fallbacks) {
-          if (badge) badge.innerText = `尝试切换 ${altModel.split('/')[1] || altModel}...`;
-          let retryRes = await sendVisionRequest(altModel);
-          if (retryRes.ok) {
-            res = retryRes;
-            model = altModel;
-            // 自动保存正常工作的模型
-            settings.model = model;
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-            break;
-          }
-        }
-      }
-    }
+    const res = await sendVisionRequest(model);
 
     if (!res.ok) {
       const errText = await res.text();
@@ -524,7 +675,7 @@ async function runOcrRecognition(type, base64Image) {
       } catch (e) {}
 
       if (errMsg.includes('model does not exist')) {
-        alert(`【API 识别失败: 模型不存在】\n当前请求的模型：${model}\n服务地址：${baseUrl}\n\n解决办法：请点击右上角设置，在视觉模型处点击【Qwen2.5-VL】或【Pro版Qwen】一键切换并保存。`);
+        alert(`【API 识别失败: 模型不存在】\n当前请求的模型：${model}\n服务地址：${baseUrl}\n\n解决办法：请打开右上角设置，在“在线模型列表”中实时拉取当前服务商的模型，再选择可用的视觉模型并保存。`);
       } else if (res.status === 400 && (errMsg.includes('support') || errMsg.includes('image') || errMsg.includes('vision'))) {
         alert(`【模型不支持视觉】当前模型 "${model}" 不支持图片！\n请在设置中选择 Qwen2.5-VL 视觉模型。`);
       } else if (res.status === 401) {
@@ -962,23 +1113,8 @@ function openSettingsModal() {
     const modelInput = document.getElementById('settingModel');
     if (modelInput) modelInput.value = currentModel;
 
-    const lowerModel = currentModel.toLowerCase();
-    if (typeof switchVendor === 'function') {
-      if (lowerModel.includes('glm') || lowerModel.includes('thudm') || lowerModel.includes('zhipu')) {
-        switchVendor('glm');
-      } else if (lowerModel.includes('qwen')) {
-        switchVendor('qwen');
-      } else {
-        switchVendor('all');
-      }
-    }
-
-    // 尝试拉取在线模型列表
-    if (settings.apiKey && typeof fetchOnlineModels === 'function') {
-      fetchOnlineModels(false);
-    } else if (typeof renderVendorModels === 'function') {
-      renderVendorModels();
-    }
+    showVisionModelsOnly = localStorage.getItem(MODEL_FILTER_KEY) !== 'false';
+    renderOnlineModels();
 
     const baseMileageEl = document.getElementById('settingBaseMileage');
     if (baseMileageEl) {
@@ -988,12 +1124,82 @@ function openSettingsModal() {
     const modal = document.getElementById('settingsModal');
     if (modal) {
       modal.classList.add('show');
-      document.body.style.overflow = 'hidden';
+      lockPageForSettings();
+      installSettingsScrollGuards(modal);
+
+      // 先展示已有缓存，再后台刷新，避免打开弹窗时看起来没有响应。
+      if (settings.apiKey && settings.baseUrl) {
+        fetchOnlineModels(false);
+      }
     }
   } catch (err) {
     console.error('打开设置弹窗异常:', err);
     alert('打开设置失败: ' + err.message);
   }
+}
+
+let settingsScrollLock = null;
+
+function lockPageForSettings() {
+  if (settingsScrollLock) return;
+
+  const body = document.body;
+  const root = document.documentElement;
+  const scrollY = window.scrollY || root.scrollTop || 0;
+  settingsScrollLock = {
+    scrollY,
+    bodyPosition: body.style.position,
+    bodyTop: body.style.top,
+    bodyLeft: body.style.left,
+    bodyRight: body.style.right,
+    bodyWidth: body.style.width,
+    bodyHeight: body.style.height,
+    bodyOverflow: body.style.overflow,
+    rootOverflow: root.style.overflow
+  };
+
+  root.classList.add('settings-open');
+  body.classList.add('settings-open');
+  root.style.overflow = 'hidden';
+  body.style.position = 'fixed';
+  body.style.top = `-${scrollY}px`;
+  body.style.left = '0';
+  body.style.right = '0';
+  body.style.width = '100%';
+  body.style.height = '100%';
+  body.style.overflow = 'hidden';
+}
+
+function unlockPageForSettings() {
+  if (!settingsScrollLock) return;
+
+  const state = settingsScrollLock;
+  const body = document.body;
+  const root = document.documentElement;
+  body.style.position = state.bodyPosition;
+  body.style.top = state.bodyTop;
+  body.style.left = state.bodyLeft;
+  body.style.right = state.bodyRight;
+  body.style.width = state.bodyWidth;
+  body.style.height = state.bodyHeight;
+  body.style.overflow = state.bodyOverflow;
+  root.style.overflow = state.rootOverflow;
+  root.classList.remove('settings-open');
+  body.classList.remove('settings-open');
+  settingsScrollLock = null;
+
+  requestAnimationFrame(() => window.scrollTo(0, state.scrollY));
+}
+
+function installSettingsScrollGuards(modal) {
+  if (modal.dataset.scrollGuardsInstalled === 'true') return;
+
+  const preventBackgroundScroll = (event) => {
+    if (!event.target.closest('.modal-body')) event.preventDefault();
+  };
+  modal.addEventListener('touchmove', preventBackgroundScroll, { passive: false });
+  modal.addEventListener('wheel', preventBackgroundScroll, { passive: false });
+  modal.dataset.scrollGuardsInstalled = 'true';
 }
 
 // 聚焦输入框时，如果是掩码，则自动清空供用户输入新Key
@@ -1122,8 +1328,9 @@ function togglePasswordVisibility(inputId) {
 
 // 右上角 X 直接关闭（不保存改动）
 function dismissSettingsModal() {
-  document.getElementById('settingsModal').classList.remove('show');
-  document.body.style.overflow = '';
+  const modal = document.getElementById('settingsModal');
+  if (modal) modal.classList.remove('show');
+  unlockPageForSettings();
 }
 
 // 点击遮罩暗色空白处直接退出
@@ -1135,43 +1342,64 @@ function handleModalOverlayClick(e) {
 
 // 点击保存并生效
 async function closeSettingsModal() {
-  const settings = getSettings();
-  const apiInput = document.getElementById('settingApiKey');
-  const amapInput = document.getElementById('settingAmapKey');
-  const ghInput = document.getElementById('settingGithubToken');
-  const newGistId = settings.gistId || '';
-  const baseUrl = document.getElementById('settingBaseUrl').value.trim();
-  const model = document.getElementById('settingModel').value.trim();
-  const baseMileage = document.getElementById('settingBaseMileage').value.trim();
-
-  const isTokenNewlySet = newGhToken && (newGhToken !== settings.githubToken || !newGistId);
-
-  const newSettings = {
-    apiKey: newApiKey,
-    amapKey: newAmapKey,
-    baseUrl: baseUrl,
-    model: model,
-    githubToken: newGhToken,
-    gistId: newGistId
-  };
-
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
-  if (baseMileage) {
-    localStorage.setItem(SETTINGS_KEY + '_base_mileage', baseMileage);
+  const saveButton = document.getElementById('btnSaveSettings');
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.innerText = '正在保存...';
   }
 
-  dismissSettingsModal();
-  onInputChanged();
-  initLocation();
+  try {
+    const settings = getSettings();
+    const readSecret = (inputId, existingValue = '') => {
+      const input = document.getElementById(inputId);
+      if (!input || input.dataset.masked === 'true' || input.value === MASK_PLACEHOLDER) {
+        return existingValue;
+      }
+      return input.value.trim();
+    };
 
-  // 如果新配置了 GitHub Token，保存后立即后台自动校验并推送一次！
-  if (newGhToken) {
-    showToast('设置已保存，正在同步云端...', true);
-    setTimeout(() => {
-      syncToCloud(false, newGhToken);
-    }, 400);
-  } else {
-    showToast('设置已保存生效！', true);
+    const newApiKey = readSecret('settingApiKey', settings.apiKey || '');
+    const newAmapKey = readSecret('settingAmapKey', settings.amapKey || '');
+    const newGhToken = readSecret('settingGithubToken', settings.githubToken || '');
+    const baseUrl = normaliseModelBaseUrl(document.getElementById('settingBaseUrl')?.value || settings.baseUrl || 'https://api.siliconflow.cn/v1');
+    const model = document.getElementById('settingModel')?.value.trim() || settings.model || 'Qwen/Qwen3-VL';
+    const baseMileage = document.getElementById('settingBaseMileage')?.value.trim() || '';
+
+    const newSettings = {
+      ...settings,
+      apiKey: newApiKey,
+      amapKey: newAmapKey,
+      baseUrl,
+      model,
+      githubToken: newGhToken,
+      gistId: settings.gistId || ''
+    };
+
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+    if (baseMileage) {
+      localStorage.setItem(SETTINGS_KEY + '_base_mileage', baseMileage);
+    } else {
+      localStorage.removeItem(SETTINGS_KEY + '_base_mileage');
+    }
+
+    dismissSettingsModal();
+    onInputChanged();
+    initLocation();
+
+    if (newGhToken) {
+      showToast('设置已保存，正在同步云端...', true);
+      window.setTimeout(() => syncToCloud(false, newGhToken), 400);
+    } else {
+      showToast('设置已保存生效！', true);
+    }
+  } catch (error) {
+    console.error('保存设置失败:', error);
+    showToast(`保存失败：${error.message}`, false);
+  } finally {
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.innerText = '保存并生效';
+    }
   }
 }
 
@@ -1293,7 +1521,7 @@ async function syncToCloud(isSilent = false, explicitToken = null) {
   const baseMileage = localStorage.getItem(SETTINGS_KEY + '_base_mileage') || '';
   const payload = {
     appName: 'Fuel Up',
-    version: '1.5.0',
+    version: APP_VERSION,
     updatedAt: new Date().toISOString(),
     baseMileage: baseMileage,
     records: records

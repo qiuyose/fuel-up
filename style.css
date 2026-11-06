@@ -649,7 +649,10 @@ input:focus {
   align-items: center;
   justify-content: center;
   z-index: 999;
+  height: 100dvh;
+  overflow: hidden;
   overscroll-behavior: contain;
+  touch-action: none;
   /* 留足顶部与底部安全区，彻底避开 iPhone 顶部的刘海、灵动岛、时间与电量 */
   padding-top: calc(env(safe-area-inset-top, 24px) + 26px);
   padding-bottom: calc(env(safe-area-inset-bottom, 20px) + 24px);
@@ -668,6 +671,7 @@ input:focus {
   width: 100%;
   max-width: 390px;
   max-height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -678,10 +682,18 @@ input:focus {
 
 .modal-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 14px 16px 20px 16px;
+}
+
+html.settings-open,
+body.settings-open {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .photo-preview-box {
@@ -832,32 +844,81 @@ select.ios-select {
 select.ios-select:focus {
   border-color: var(--primary);
 }
-/* 供应商切换胶囊 */
-.vendor-chip {
-  flex: 1;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(120, 120, 128, 0.16);
-  background: rgba(120, 120, 128, 0.06);
-  color: var(--text-main);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+
+.model-list-toolbar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  transition: all 0.22s cubic-bezier(0.25, 1, 0.5, 1);
+  justify-content: space-between;
+  gap: 10px;
+  margin: 2px 0 8px;
+}
+
+.vision-model-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-.vendor-chip.active {
-  background: linear-gradient(180deg, #1A8CFF 0%, #0071E3 100%);
-  color: #FFFFFF;
-  border-color: rgba(255, 255, 255, 0.45);
-  box-shadow: 
-    0 3px 10px rgba(0, 113, 227, 0.3),
-    inset 0 1.2px 1.2px rgba(255, 255, 255, 0.75);
-  transform: translateY(-1px);
+.vision-model-filter input {
+  width: 30px;
+  height: 18px;
+  margin: 0;
+  border: 0;
+  border-radius: 999px;
+  appearance: none;
+  -webkit-appearance: none;
+  background: rgba(120, 120, 128, 0.28);
+  cursor: pointer;
+  transition: background 0.18s ease;
+  position: relative;
+}
+
+.vision-model-filter input::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #FFFFFF;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.18s ease;
+}
+
+.vision-model-filter input:checked {
+  background: var(--accent-green);
+}
+
+.vision-model-filter input:checked::after {
+  transform: translateX(12px);
+}
+
+.refresh-models-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgba(0, 122, 255, 0.1);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.refresh-models-btn:disabled {
+  opacity: 0.55;
+}
+
+.refresh-models-btn:active {
+  transform: scale(0.96);
 }
 
 /* 原生 iOS 沉浸式照片全屏预览查看器 (LightBox) */

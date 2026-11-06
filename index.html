@@ -17,7 +17,7 @@
   <meta name="theme-color" content="#F2F2F7" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
 
-  <link rel="stylesheet" href="style.css?v=20261104_modal_fix">
+  <link rel="stylesheet" href="style.css?v=1.5.1">
 </head>
 <body style="background-color: #F2F2F7;">
 
@@ -195,8 +195,8 @@
   </div>
 
   <!-- 设置与备份弹窗 -->
-    <div class="modal-overlay" id="settingsModal" onclick="handleModalOverlayClick(event)">
-      <div class="modal-content" onclick="event.stopPropagation()">
+    <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-label="系统配置与数据管理">
+      <div class="modal-content">
         <!-- 弹窗标题与右上角 X 关闭按钮 (吸顶固定，永不被遮挡) -->
         <div class="modal-header">
           <div class="modal-title">系统配置与数据管理</div>
@@ -227,30 +227,23 @@
 
             <div class="form-group" style="margin-bottom:0;">
               <div class="label-row">
-                <label style="font-size:12px;color:var(--text-muted);font-weight:600;">视觉模型选择</label>
+                <label style="font-size:12px;color:var(--text-muted);font-weight:600;">在线模型列表</label>
                 <span id="modelCountBadge" style="font-size:11px;color:var(--primary);font-weight:600;"></span>
               </div>
-              
-              <!-- 核心供应商快速分类（千问/智谱/全部） -->
-              <div style="display:flex; gap:6px; margin-bottom:8px;">
-                <button type="button" class="vendor-chip active" id="btnVendorQwen" onclick="switchVendor('qwen')">千问 (Qwen)</button>
-                <button type="button" class="vendor-chip" id="btnVendorGlm" onclick="switchVendor('glm')">智谱 (GLM)</button>
-                <button type="button" class="vendor-chip" id="btnVendorAll" onclick="switchVendor('all')">全部视觉</button>
-              </div>
-
-              <div class="label-row" style="margin-top:4px;">
-                <label style="font-size:11px;color:var(--text-muted)">在线模型列表</label>
-                <button type="button" onclick="fetchOnlineModels(true)" style="background:none;border:none;color:var(--primary);font-size:12px;font-weight:600;cursor:pointer;">
-                  🔄 实时拉取上游模型
-                </button>
+              <div class="model-list-toolbar">
+                <label class="vision-model-filter" for="visionModelsOnly">
+                  <input type="checkbox" id="visionModelsOnly" checked onchange="setVisionModelFilter(this.checked)">
+                  <span>仅显示视觉模型</span>
+                </label>
+                <button type="button" id="btnRefreshModels" class="refresh-models-btn" onclick="fetchOnlineModels(true)">实时拉取</button>
               </div>
               <select id="selectDynamicModel" class="ios-select" style="height:38px;font-size:13px;" onchange="onDynamicModelChanged(this.value)">
-                <option value="">点击上方“实时拉取”获取列表</option>
+                <option value="">填写地址和 API Key 后点击“实时拉取”</option>
               </select>
 
-              <input type="text" id="settingModel" placeholder="当前生效的模型ID" style="margin-top:6px;height:38px;font-size:13px;">
+              <input type="text" id="settingModel" placeholder="当前生效的模型 ID" style="margin-top:6px;height:38px;font-size:13px;">
               <small style="display:block;font-size:11px;color:var(--text-muted);margin-top:4px;">
-                填写服务地址后点击“实时拉取”，直接在下拉框点选即可生效。
+                填写服务地址和 API Key 后可实时拉取上游模型；下拉框点选或手动填写后，保存即可生效。
               </small>
             </div>
           </div>
@@ -315,14 +308,14 @@
           </div>
 
           <!-- 保存并生效按钮 -->
-          <button class="btn-submit" onclick="closeSettingsModal()" style="margin-top:4px;">保存并生效</button>
+          <button type="button" id="btnSaveSettings" class="btn-submit" onclick="closeSettingsModal()" style="margin-top:4px;">保存并生效</button>
 
           <!-- 应用版本与在线更新卡片 -->
           <div style="margin-top:16px; padding:12px 14px; background:rgba(120, 120, 128, 0.06); border-radius:12px; border:1px solid var(--separator);">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div>
                 <div style="font-size:13px; font-weight:600; color:var(--text-main);">Fuel Up 稳定版</div>
-                <div id="appVersionLabel" style="font-size:11px; color:var(--text-muted); margin-top:2px;">版本 v1.5.0 · 离线秒开</div>
+                <div id="appVersionLabel" style="font-size:11px; color:var(--text-muted); margin-top:2px;">版本 v1.5.2 · 离线秒开</div>
               </div>
               <button type="button" id="btnUpdateApp" class="cam-btn" style="height:32px; font-size:12px; padding:0 12px; border-radius:16px;" onclick="checkAndUpdateApp()">
                 检查更新
@@ -346,6 +339,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=1.5.2"></script>
 </body>
 </html>
