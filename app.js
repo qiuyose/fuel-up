@@ -1153,6 +1153,8 @@ function loadSettings() {
     const el = document.getElementById('settingBaseMileage');
     if (el) el.value = base;
   }
+  const verEl = document.getElementById('appVersionLabel');
+  if (verEl) verEl.innerText = `版本 v${APP_VERSION} · 离线秒开`;
 }
 
 function openSettingsModal() {
