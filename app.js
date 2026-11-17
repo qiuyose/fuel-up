@@ -174,8 +174,8 @@ function onDynamicModelChanged(val) {
   }
 }
 
-// v1.5.2: 仅使用当前服务商实际返回的在线模型，不再内置供应商分组或过期候选模型。
-const APP_VERSION = '1.5.2';
+// v1.6.0: 存储架构升级为 IndexedDB 大容量存储（突破 5MB 限制，旧数据自动无缝平滑迁移）；金额与升数展示精确到两位小数；GitHub 同步时间增加年月日日期展示。
+const APP_VERSION = '1.6.0';
 const MODEL_CACHE_KEY = 'cached_online_models_v1';
 const LEGACY_MODEL_CACHE_KEY = 'cached_vision_models';
 const MODEL_FILTER_KEY = 'show_vision_models_only';
@@ -351,10 +351,121 @@ function onDynamicModelChanged(value) {
     input.focus();
   }
 }
-// Fuel Up - 核心逻辑 (v1.3 密码掩码与直观状态版)
+// Fuel Up - 核心逻辑 (v1.6.0: IndexedDB 大容量本地存储与双轨容灾)
 const STORAGE_KEY = 'fuel_records_data_v1';
 const SETTINGS_KEY = 'fuel_records_settings_v1';
 const MASK_PLACEHOLDER = '••••••••••••••••'; // 掩码占位符
+
+// --- IndexedDB 大容量存储引擎与旧数据平滑迁移 ---
+const IDB_NAME = 'FuelUpDB';
+const IDB_VERSION = 1;
+const IDB_STORE = 'fuel_data_store';
+let memoryRecords = [];
+
+// 内存快照优先读取 LocalStorage 进行即时 0ms 呈现
+try {
+  memoryRecords = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+} catch (e) {
+  memoryRecords = [];
+}
+
+function openDB() {
+  return new Promise((resolve) => {
+    if (!window.indexedDB) {
+      resolve(null);
+      return;
+    }
+    const req = indexedDB.open(IDB_NAME, IDB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(IDB_STORE)) {
+        db.createObjectStore(IDB_STORE);
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => {
+      console.warn('IndexedDB 打开受限，降级使用 LocalStorage:', req.error);
+      resolve(null);
+    };
+  });
+}
+
+async function idbGet(key) {
+  const db = await openDB();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.get(key);
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch (e) {
+      resolve(null);
+    }
+  });
+}
+
+async function idbSet(key, value) {
+  const db = await openDB();
+  if (!db) return false;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      const store = tx.objectStore(IDB_STORE);
+      const req = store.put(value, key);
+      req.onsuccess = () => resolve(true);
+      req.onerror = () => resolve(false);
+    } catch (e) {
+      resolve(false);
+    }
+  });
+}
+
+// 自动完成老数据平滑迁移与 IndexedDB 激活
+async function initIndexedDBStorage() {
+  try {
+    const idbData = await idbGet('fuel_records');
+    let localData = null;
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) localData = JSON.parse(raw);
+    } catch(e) {}
+
+    if (Array.isArray(idbData) && idbData.length > 0) {
+      memoryRecords = idbData;
+    } else if (Array.isArray(localData) && localData.length > 0) {
+      // 首次从旧版 LocalStorage 无感平滑迁移至 IndexedDB
+      memoryRecords = localData;
+      await idbSet('fuel_records', memoryRecords);
+      console.log('Fuel Up: 已成功将旧版加油记录无缝迁移至 IndexedDB 大容量存储！');
+    }
+  } catch (err) {
+    console.warn('IndexedDB 数据加载与迁移异常:', err);
+  } finally {
+    renderStats();
+    renderHistory();
+    onInputChanged();
+  }
+}
+
+// 统一持久化存储函数（自动双写与降级防护）
+async function saveRecordsToStorage(records) {
+  memoryRecords = Array.isArray(records) ? records : [];
+  // 1. 优先异步写入高容量 IndexedDB (数百兆配额，彻底打破 5MB 限制)
+  await idbSet('fuel_records', memoryRecords);
+
+  // 2. 尝试向 LocalStorage 镜像备份（提供离线容灾，若超 5MB 配额则静默捕获，绝不报错）
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(memoryRecords));
+  } catch (quotaErr) {
+    console.warn('LocalStorage 达到 5MB 配额上限，已安全切换为主存 IndexedDB 独立承载:', quotaErr);
+  }
+}
+
+function getRecords() {
+  return memoryRecords;
+}
 
 let currentOil = '92#';
 let currentStation = '中国石化加油站';
@@ -366,10 +477,11 @@ window.addEventListener('DOMContentLoaded', () => {
   initDate();
   loadSettings();
   initLocation();
+  initIndexedDBStorage();
   renderStats();
   renderHistory();
   registerServiceWorker();
-    checkPendingSync();
+  checkPendingSync();
 });
 
 // 1. 注册 PWA Service Worker
@@ -785,7 +897,7 @@ function saveRecord() {
   };
 
   records.unshift(recordItem);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  saveRecordsToStorage(records);
 
   alert('本次加油记录已成功保存！');
   resetForm();
@@ -814,7 +926,7 @@ function renderStats() {
   if (records.length === 0) {
     document.getElementById('statTotalMileage').innerText = '0 km';
     document.getElementById('statAvgL100').innerText = '- L';
-    document.getElementById('statMonthCost').innerText = '¥0';
+    document.getElementById('statMonthCost').innerText = '¥0.00';
     return;
   }
 
@@ -837,7 +949,7 @@ function renderStats() {
     })
     .reduce((sum, r) => sum + (r.actualPay || r.amount), 0);
 
-  document.getElementById('statMonthCost').innerText = `¥${monthCost.toFixed(0)}`;
+  document.getElementById('statMonthCost').innerText = `¥${monthCost.toFixed(2)}`;
 }
 
 // 11. 渲染历史列表
@@ -857,6 +969,8 @@ function renderHistory() {
     const d = new Date(r.date);
     const dateStr = `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     const hasPhoto = r.photos && (r.photos.dashboard || r.photos.meter);
+    const amountVal = (r.amount !== undefined && r.amount !== null ? Number(r.amount) : 0).toFixed(2);
+    const volumeVal = (r.volume !== undefined && r.volume !== null ? Number(r.volume) : 0).toFixed(2);
 
     return `
       <div class="history-card">
@@ -872,11 +986,11 @@ function renderHistory() {
         
         <div class="history-details">
           <div>
-            <div class="val">¥${r.amount.toFixed(1)}</div>
+            <div class="val">¥${amountVal}</div>
             <div class="lbl">消费金额</div>
           </div>
           <div>
-            <div class="val">${r.volume.toFixed(1)}L</div>
+            <div class="val">${volumeVal}L</div>
             <div class="lbl">加油升数</div>
           </div>
           <div>
@@ -909,7 +1023,7 @@ function deleteRecord(id) {
   if (!confirm('确定要删除这笔记录吗？')) return;
   let records = getRecords();
   records = records.filter(r => r.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  saveRecordsToStorage(records);
   renderStats();
   renderHistory();
   syncToCloud(true); // 删除后同步
@@ -1006,7 +1120,7 @@ function importJSON(input) {
     try {
       const bundle = JSON.parse(e.target.result);
       if (bundle.records) {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(bundle.records));
+        saveRecordsToStorage(bundle.records);
         if (bundle.settings) {
           localStorage.setItem(SETTINGS_KEY, JSON.stringify(bundle.settings));
         }
@@ -1023,13 +1137,7 @@ function importJSON(input) {
 }
 
 // 14. 设置弹窗管理与掩码控制
-function getRecords() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch (e) {
-    return [];
-  }
-}
+// (注：getRecords() 已在顶部持久化引擎中统一维护)
 
 function getSettings() {
   try {
@@ -1485,6 +1593,18 @@ function showToast(msg, isSuccess = true) {
 
 // --- GitHub Gist 云端自动同步与离线重试核心逻辑 ---
 
+// 格式化云端同步展示时间（包含年月日与时分，如 2026/11/17 11:28）
+function formatSyncTime(dateInput = new Date()) {
+  const d = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return String(dateInput || '');
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${y}/${m}/${day} ${hh}:${mm}`;
+}
+
 // 离线待同步检查与自动补传 (解决地下车库等弱网断网场景)
 async function checkPendingSync() {
   if (!navigator.onLine) return;
@@ -1610,7 +1730,7 @@ async function syncToCloud(isSilent = false, explicitToken = null) {
     const badgeGh = document.getElementById('badgeGithubStatus');
     if (badgeGh) badgeGh.style.display = 'inline-block';
 
-    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const nowStr = formatSyncTime(new Date());
     localStorage.setItem(SETTINGS_KEY + '_last_sync', nowStr);
     const timeEl = document.getElementById('cloudLastSyncTime');
     if (timeEl) timeEl.innerText = '刚刚同步 (' + nowStr + ')';
@@ -1744,10 +1864,14 @@ async function manualRestoreFromCloud() {
     const data = JSON.parse(rawContent);
 
     if (Array.isArray(data.records)) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.records));
+      await saveRecordsToStorage(data.records);
       if (data.baseMileage) {
         localStorage.setItem(SETTINGS_KEY + '_base_mileage', data.baseMileage);
       }
+      const restoreTimeStr = formatSyncTime(new Date());
+      localStorage.setItem(SETTINGS_KEY + '_last_sync', restoreTimeStr);
+      const timeEl = document.getElementById('cloudLastSyncTime');
+      if (timeEl) timeEl.innerText = '刚刚拉取 (' + restoreTimeStr + ')';
       renderStats();
       renderHistory();
       onInputChanged();

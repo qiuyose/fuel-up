@@ -1,9 +1,9 @@
-﻿const CACHE_NAME = 'fuel-up-v23';
+﻿const CACHE_NAME = 'fuel-up-v25';
 const ASSETS = [
   './',
   './index.html',
   './style.css?v=1.5.1',
-  './app.js?v=1.5.2',
+  './app.js?v=1.6.0',
   './manifest.json?v=20261021',
   './icon.svg?v=20261021',
   './apple-touch-icon.png?v=20261021',
